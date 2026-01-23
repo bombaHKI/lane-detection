@@ -21,9 +21,12 @@ Further details and progress will be documented as the project evolves.
 For visualising this large lidar input I use use Potree viewer.
 The laz files have to be converted to ept tiles first.
 
-From 'data/lidar_ept': 'lidar_ept % http-server -p 8000 --cors'
-From 'projects/potree/' (external): 'npm start'
-Now you can open 'http://localhost:1234/examples/lidar_vis.html'.
+**Creating the ept tiles:** `entwine build -i 871e1d886ffffff_cegl_m4_2_ground.laz -o ../lidar_ept/871e1d886ffffff_cegl_m4_2_ground`
+
+Reminder on how to view the ept files:
+- From 'data/lidar_ept': 'lidar_ept % http-server -p 8000 --cors'
+- From 'projects/potree/' (external): 'npm start'
+- Open 'http://localhost:1234/examples/lidar_vis.html'.
 
 ### Project Management
 Using the credentials for uv: `export $(grep -v '^#' .secrets.env | xargs)`
