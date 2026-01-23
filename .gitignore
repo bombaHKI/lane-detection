@@ -1,0 +1,5 @@
+data/
+.venv/
+.secrets.env
+uv.lock
+.DS_Store
