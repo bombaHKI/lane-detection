@@ -11,9 +11,7 @@ def find_points_in_time_window(
     points: np.ndarray,
     timestamps: np.ndarray,
     target_time: float,
-    time_window: float,
-    prev_location: Optional[np.ndarray] = None,
-    epsilon: float = 10.0
+    time_window: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Find points within time window and optionally within spatial epsilon of previous location.
@@ -23,29 +21,19 @@ def find_points_in_time_window(
         timestamps: N array of GPS timestamps
         target_time: Target timestamp to search around
         time_window: Time window in milliseconds (±window)
-        prev_location: Previous location (XYZ). If None, no spatial filtering
-        epsilon: Maximum distance in meters from previous location
         
     Returns:
         Tuple of (filtered_points, filtered_timestamps)
     """
     # Time filtering
-    time_mask = np.abs(timestamps - target_time) <= time_window
-    
-    if prev_location is not None:
-        # Spatial filtering
-        distances = np.linalg.norm(points - prev_location, axis=1)
-        spatial_mask = distances <= epsilon
-        mask = time_mask & spatial_mask
-    else:
-        mask = time_mask
-    
+    mask = np.abs(timestamps - target_time) <= time_window
     return points[mask], timestamps[mask]
 
 
-def calculate_average_location(points: np.ndarray) -> Optional[np.ndarray]:
+def estimated_pos(points: np.ndarray) -> Optional[np.ndarray]:
     """
-    Calculate median location of points.
+    Calculate estimated position from given points.
+    Current implementation: median of xyz coordinates.
     
     Args:
         points: Nx3 array of XYZ coordinates
@@ -60,10 +48,9 @@ def calculate_average_location(points: np.ndarray) -> Optional[np.ndarray]:
 
 def recreate_trajectory(
     file_path: str,
-    initial_offset: float = 2000.0,
-    time_window: float = 10.0,
-    time_step: float = 5.0,
-    epsilon: float = 10.0,
+    initial_offset: float = 4.0,
+    time_window: float = .1,
+    time_step: float = 0.5,
     output_path: str = "data/geojson/car_trajectory.geojson"
 ) -> List[Tuple[np.ndarray, float]]:
     """
@@ -71,9 +58,9 @@ def recreate_trajectory(
     
     Args:
         file_path: Path to LiDAR file (.laz or .las)
-        initial_offset: Milliseconds after minimum timestamp to start (default: 2000)
-        time_window: Time window in milliseconds for point selection (±window, default: 10)
-        time_step: Milliseconds to increment time each iteration (default: 5)
+        initial_offset: Seconds after minimum timestamp to start (default: 4)
+        time_window: Time window in milliseconds for point selection (±window, default: .1)
+        time_step: Seconds to increment time each iteration (default: .5)
         epsilon: Maximum distance in meters for spatial filtering (default: 10)
         output_path: Path to save GeoJSON output
         
@@ -107,9 +94,7 @@ def recreate_trajectory(
     print(f"Initial time: {current_time:.3f}")
     print(f"Time window: ±{time_window} ms")
     print(f"Time step: {time_step} ms")
-    print(f"Spatial epsilon: {epsilon} m")
     
-    iteration = 0
     no_points_count = 0
     max_no_points = 20  # Stop if no points found for 100 consecutive iterations
     
@@ -117,18 +102,17 @@ def recreate_trajectory(
         print(f"Timestamp: {current_time}")
         # Find points within time window and spatial constraints
         filtered_points, filtered_times = find_points_in_time_window(
-            points, timestamps, current_time, time_window, prev_location, epsilon
+            points, timestamps, current_time, time_window
         )
         
         if len(filtered_points) > 0:
             # Calculate average location
-            avg_location = calculate_average_location(filtered_points)
+            avg_location = estimated_pos(filtered_points)
             trajectory.append((avg_location, current_time))
             prev_location = avg_location
             no_points_count = 0
             
-            if iteration % 1000 == 0:
-                print(f"Iteration {iteration}: Time={current_time:.3f}, Points={len(filtered_points)}, "
+            print(f"Time={current_time:.3f}, Points={len(filtered_points)}, "
                       f"Location=[{avg_location[0]:.2f}, {avg_location[1]:.2f}, {avg_location[2]:.2f}]")
         else:
             no_points_count += 1
@@ -138,7 +122,6 @@ def recreate_trajectory(
         
         # Increment time
         current_time += time_step
-        iteration += 1
     
     print(f"\nTrajectory reconstruction complete!")
     print(f"Total trajectory points: {len(trajectory)}")
@@ -162,7 +145,6 @@ def save_trajectory_geojson(
     Save trajectory as GeoJSON file.
     
     Note: This saves coordinates in the original projection (likely Web Mercator EPSG:3857).
-    The Potree viewer will handle the coordinate transformation.
     
     Args:
         trajectory: List of (location, timestamp) tuples
@@ -173,11 +155,13 @@ def save_trajectory_geojson(
         print(f"No trajectory to save to {output_path}")
         return
     
-    # Extract coordinates (using X, Y from the points, ignoring Z for 2D line)
-    coordinates = [[float(loc[0]), float(loc[1])] for loc, _ in trajectory]
+    # Extract coordinates (X, Y, Z) using numpy for efficiency
+    locations = np.array([loc for loc, _ in trajectory])
+    coordinates = locations.astype(float).tolist()
     
-    # Extract timestamps for properties
-    timestamps = [float(t) for _, t in trajectory]
+    # Get start and end timestamps
+    start_time = float(trajectory[0][1])
+    end_time = float(trajectory[-1][1])
     
     # Create GeoJSON structure with CRS information
     geojson = {
@@ -195,9 +179,9 @@ def save_trajectory_geojson(
                     "name": "Car Trajectory",
                     "source_file": str(source_file),
                     "num_points": len(trajectory),
-                    "start_time": timestamps[0],
-                    "end_time": timestamps[-1],
-                    "duration": timestamps[-1] - timestamps[0]
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "duration": end_time - start_time
                 },
                 "geometry": {
                     "type": "LineString",
@@ -216,18 +200,17 @@ def save_trajectory_geojson(
     
     print(f"Trajectory saved to {output_path}")
     print(f"  Points: {len(trajectory)}")
-    print(f"  Time range: {timestamps[0]:.3f} to {timestamps[-1]:.3f}")
-    print(f"  Duration: {timestamps[-1] - timestamps[0]:.3f} time units")
+    print(f"  Time range: {start_time:.3f} to {end_time:.3f}")
+    print(f"  Duration: {end_time - start_time:.3f} time units")
 
 
 def main():
     """Main entry point."""
     recreate_trajectory(
         file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz",
-        initial_offset=10.0,
-        time_window=.5,
-        time_step=1.0,
-        epsilon=100.0,
+        initial_offset=4.0,
+        time_window=.1,
+        time_step=.5,
         output_path="data/geojson/car_trajectory.geojson"
     )
 
