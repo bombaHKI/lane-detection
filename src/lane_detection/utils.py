@@ -4,6 +4,9 @@ import laspy
 import numpy as np
 import open3d as o3d
 import os
+import json
+from pathlib import Path
+from typing import List, Tuple
 
 
 def read_to_3d(file_path: str) -> o3d.t.geometry.PointCloud:
@@ -112,3 +115,71 @@ def export_pcd_to_laz(
 
     # ---- write ----
     las.write(out_path)
+
+def save_trajectory_geojson(
+    trajectory: List[Tuple[np.ndarray, float]],
+    output_path: str,
+    source_file: str
+):
+    """
+    Save trajectory as GeoJSON file.
+    
+    Note: This saves coordinates in the original projection (likely Web Mercator EPSG:3857).
+    
+    Args:
+        trajectory: List of (location, timestamp) tuples
+        output_path: Output file path
+        source_file: Source LiDAR file path (for metadata)
+    """
+    if len(trajectory) == 0:
+        print(f"No trajectory to save to {output_path}")
+        return
+    
+    # Extract coordinates (X, Y, Z) using numpy for efficiency
+    locations = np.array([loc for loc, _ in trajectory])
+    coordinates = locations.astype(float).tolist()
+    
+    # Get start and end timestamps
+    start_time = float(trajectory[0][1])
+    end_time = float(trajectory[-1][1])
+    
+    # Create GeoJSON structure with CRS information
+    geojson = {
+        "type": "FeatureCollection",
+        "crs": {
+            "type": "name",
+            "properties": {
+                "name": "urn:ogc:def:crs:EPSG::3857"
+            }
+        },
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": "Car Trajectory",
+                    "source_file": str(source_file),
+                    "num_points": len(trajectory),
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "duration": end_time - start_time
+                },
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": coordinates
+                }
+            }
+        ]
+    }
+    
+    # Save to file
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, 'w') as f:
+        json.dump(geojson, f, indent=2)
+    
+    print(f"Trajectory saved to {output_path}")
+    print(f"  Points: {len(trajectory)}")
+    print(f"  Time range: {start_time:.3f} to {end_time:.3f}")
+    print(f"  Duration: {end_time - start_time:.3f} time units")
+
