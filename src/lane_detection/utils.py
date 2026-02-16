@@ -46,7 +46,6 @@ def read_to_3d(file_path: str) -> o3d.t.geometry.PointCloud:
 
     return pcd_t
 
-
 def export_pcd_to_laz(
     pcd: o3d.t.geometry.PointCloud,
     out_path: str,
