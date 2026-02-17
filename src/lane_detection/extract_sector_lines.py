@@ -13,7 +13,7 @@ def extract_sector_lines(
     las: laspy.LasData,
     clip_index: int = 0,
     steps: int = 4,
-    large_steps: int = 20,
+    large_steps: int = 100,
     lines_per_large_step = 10,
     num_steps: int = 10
 ):
@@ -48,6 +48,7 @@ def extract_sector_lines(
     lines = []
     # Extract and save slices
     progress = 0
+    time_index = 0
     for time_index in range(0, len(unique_times), steps):
         if time_index / len(unique_times) * 100 >= progress + 5:
             progress += 5

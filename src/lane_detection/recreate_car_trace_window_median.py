@@ -120,8 +120,6 @@ def recreate_trajectory(
     time_to_points, unique_times = build_pulse_map(las.xyz, timestamps)
     print(f"Mapping done in {timer()-start} seconds")
     
-    no_points_count = 0
-    
     progress = 0
     while current_time <= max_timestamp:
         curr_progress = (current_time-min_timestamp)/(max_timestamp-min_timestamp)*100
