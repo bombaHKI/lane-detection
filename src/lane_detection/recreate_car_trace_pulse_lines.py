@@ -140,7 +140,7 @@ def main():
         file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz",
         initial_offset=.5,
         time_step=.1,
-        output_path="data/geojson/car_trajectory_v3_pulse_line_intersection.geojson"
+        output_path="data/geojson/car_trajectory_v2_pulse_line_intersection.geojson"
     )
 
 

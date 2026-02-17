@@ -40,7 +40,7 @@ def find_points_in_time_window(
 
     for t in candidate_times:
         pts = time_to_points[float(t)]
-        if pts:
+        if pts.size:
             filtered_points.extend(pts)
             filtered_timestamps.extend([float(t)] * len(pts))
 
@@ -161,7 +161,7 @@ def main():
         initial_offset=4.0,
         time_window=.05,
         time_step=.2,
-        output_path="data/geojson/car_trajectory_v2.geojson"
+        output_path="data/geojson/car_trajectory_v1_window_median.geojson"
     )
 
 
