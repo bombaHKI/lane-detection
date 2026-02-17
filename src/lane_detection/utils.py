@@ -182,3 +182,34 @@ def save_trajectory_geojson(
     print(f"  Time range: {start_time:.3f} to {end_time:.3f}")
     print(f"  Duration: {end_time - start_time:.3f} time units")
 
+def build_pulse_map(points: np.ndarray, gps_times: list):
+    """
+    Builds a timestamp -> ndarray of points map
+    
+    Args:
+        :param points: The points in the lidar data
+        :type points: np.ndarray
+        :param gps_times: The timestamps corresponding to each point 
+        :type gps_times: list
+    Returns:
+        the timestamp->points map and the `unique_timestamps` in the gps_times
+    """
+    # 1. Sort by time (returns indices that would sort the array)
+    # This is the most expensive step: O(N log N)
+    sort_idx = np.argsort(gps_times)
+    
+    # 2. Apply sorting to both arrays
+    sorted_points = points[sort_idx]
+    sorted_times = gps_times[sort_idx]
+    
+    # 3. Find unique times and the split indices
+    # return_index=True gives the first index where each unique value appears
+    unique_times, start_indices = np.unique(sorted_times, return_index=True)
+    
+    # 4. Split the points array into chunks based on start indices
+    # We skip start_indices[0] because it's always 0 (the beginning)
+    grouped_points = np.split(sorted_points, start_indices[1:])
+    
+    # 5. Combine into a dictionary
+    # zip is fast here because we are zipping 412k items, not 104M
+    return dict(zip(unique_times, grouped_points)), unique_times

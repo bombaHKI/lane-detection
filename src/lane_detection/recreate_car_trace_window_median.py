@@ -5,7 +5,7 @@ from typing import Tuple, List, Optional, DefaultDict
 import laspy
 from collections import defaultdict
 from timeit import default_timer as timer
-from lane_detection.utils import save_trajectory_geojson
+from lane_detection.utils import save_trajectory_geojson, build_pulse_map
 
 
 def find_points_in_time_window(
@@ -116,11 +116,8 @@ def recreate_trajectory(
     print(f"Time window: ±{time_window} ms")
     print(f"Time step: {time_step} ms")
 
-    time_to_points = defaultdict(list)
     print(f"Mapping points to time values")
-    for point, t in zip(points, timestamps):
-        time_to_points[t].append(point)
-    unique_times = np.unique(timestamps)
+    time_to_points, unique_times = build_pulse_map(las.xyz, timestamps)
     print(f"Mapping done in {timer()-start} seconds")
     
     no_points_count = 0
