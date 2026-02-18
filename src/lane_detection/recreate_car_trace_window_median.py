@@ -156,13 +156,15 @@ def recreate_trajectory(
 
 def main():
     """Main entry point."""
-    recreate_trajectory(
-        file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz",
+    file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
+    output_path="data/geojson/car_trajectory_v1_window_median.geojson"
+    trajectory = recreate_trajectory(
+        file_path=file_path,
         initial_offset=4.0,
         time_window=.05,
-        time_step=.2,
-        output_path="data/geojson/car_trajectory_v1_window_median.geojson"
+        time_step=.2
     )
+    save_trajectory_geojson(trajectory, output_path, file_path)
 
 
 if __name__ == "__main__":
