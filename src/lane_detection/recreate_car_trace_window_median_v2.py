@@ -3,6 +3,7 @@
 import numpy as np
 from typing import Tuple, List, Optional, DefaultDict
 import laspy
+import open3d as o3d
 from collections import defaultdict
 from timeit import default_timer as timer
 from lane_detection.utils import save_trajectory_geojson, build_pulse_map
@@ -50,20 +51,78 @@ def find_points_in_time_window(
     return np.asarray(filtered_points), np.asarray(filtered_timestamps, dtype=timestamps.dtype)
 
 
-def estimated_pos(points: np.ndarray) -> Optional[np.ndarray]:
+def estimated_pos(points: np.ndarray, offset_from_ground: int = 1.7, segment_radius: int = 4) -> Optional[np.ndarray]:
     """
     Calculate estimated position from given points.
-    Current implementation: median of xyz coordinates.
+    Implementation: 
+    1. 1st estimation: median of xyz coordinates.
+    2. Ground detection around point.
+    3. Median of all points that are below ground+offset.
     
     Args:
         points: Nx3 array of XYZ coordinates
+        offset_from_ground: Points above ground level + offset will not be considered in the estimation
+        segment_radius: segment ground in the radius of the first estimation
         
     Returns:
         Median location [x, y, z] or None if no points
     """
     if len(points) == 0:
         return None
-    return np.median(points, axis=0)
+    estimation1 =  np.median(points, axis=0)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points[np.linalg.norm(points[:,:2]-estimation1[:2],axis=1)<segment_radius])
+    if (len(pcd.points) < 50):
+        print(f"Too few points! x: {estimation1[0]}, y: {estimation1[1]}")
+        return estimation1
+    max_iterations = 5
+    valid_plane_found = False    
+    for attempt in range(max_iterations):
+        plane_model, inliers = pcd.segment_plane(
+            distance_threshold=0.05,
+            ransac_n=3,
+            num_iterations=100
+        )
+
+        a, b, c, d = plane_model
+        
+        # Calculate gradient (slope) from plane normal
+        # Gradient = sqrt(a^2 + b^2) / |c|
+        # 40% gradient = 0.4 = tan(angle) ≈ 21.8 degrees
+        horizontal_component = np.sqrt(a**2 + b**2)
+        vertical_component = np.abs(c)
+        
+        if vertical_component < 1e-6:  # nearly vertical plane
+            gradient = float('inf')
+        else:
+            gradient = horizontal_component / vertical_component
+        
+        # Check if gradient is less than 40% (0.4)
+        if gradient < 0.4:
+            valid_plane_found = True
+            break
+        
+        # Remove inliers and try again with remaining points
+        if len(inliers) > 0:
+            remaining_mask = np.ones(len(pcd.points), dtype=bool)
+            remaining_mask[inliers] = False
+            remaining_points = np.asarray(pcd.points)[remaining_mask]
+            
+            if len(remaining_points) < 3:
+                break
+                
+            pcd.points = o3d.utility.Vector3dVector(remaining_points)
+        else:
+            break
+    
+    if not valid_plane_found:
+        print(f"No ground segmented")
+        return estimation1
+
+    x,y = estimation1[:2]
+    ground_height = -(a*x+b*y+d)/c
+    estimation2 =  np.median(points[points[:,2]<=ground_height+offset_from_ground], axis=0)
+    return estimation2
 
 
 def recreate_trajectory(
@@ -154,7 +213,7 @@ def recreate_trajectory(
 def main():
     """Main entry point."""
     file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
-    output_path="data/geojson/car_trajectory_v1_window_median.geojson"
+    output_path="data/geojson/car_trajectory_v1_window_median_ground_detect.geojson"
     trajectory = recreate_trajectory(
         file_path=file_path,
         initial_offset=4.0,

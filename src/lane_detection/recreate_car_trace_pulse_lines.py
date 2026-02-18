@@ -126,8 +126,6 @@ def recreate_trajectory(
         print("Warning: No trajectory points generated!")
         return trajectory
     
-    # Save as GeoJSON
-    
     return trajectory
 
 def main():
