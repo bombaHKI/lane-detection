@@ -27,8 +27,7 @@ def are_perpendicular(m1, m2, tolerance_degrees=20.0):
 def recreate_trajectory(
     file_path: str,
     initial_offset: float = 4.0,
-    time_step: float = 0.5,
-    output_path: str = "data/geojson/car_trajectory.geojson"
+    time_step: float = 0.5
 ) -> List[Tuple[np.ndarray, float]]:
     """
     Recreate car trajectory from LiDAR GPS timestamps.
@@ -36,9 +35,7 @@ def recreate_trajectory(
     Args:
         file_path: Path to LiDAR file (.laz or .las)
         initial_offset: Seconds after minimum timestamp to start (default: 4)
-        time_window: Time window in milliseconds for point selection (±window, default: .1)
         time_step: Seconds to increment time each iteration (default: .5)
-        output_path: Path to save GeoJSON output
         
     Returns:
         List of (location, timestamp) tuples representing the trajectory
@@ -129,19 +126,18 @@ def recreate_trajectory(
         print("Warning: No trajectory points generated!")
         return trajectory
     
-    # Save as GeoJSON
-    save_trajectory_geojson(trajectory, output_path, file_path)
-    
     return trajectory
 
 def main():
     """Main entry point."""
-    recreate_trajectory(
-        file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz",
+    file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
+    output_path="data/geojson/car_trajectory_v2_pulse_line_intersection.geojson"
+    trajectory = recreate_trajectory(
+        file_path=file_path,
         initial_offset=.5,
-        time_step=.1,
-        output_path="data/geojson/car_trajectory_v2_pulse_line_intersection.geojson"
+        time_step=.05
     )
+    save_trajectory_geojson(trajectory, output_path, file_path)
 
 
 if __name__ == "__main__":
