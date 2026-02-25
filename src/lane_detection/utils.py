@@ -7,7 +7,24 @@ import os
 import json
 from pathlib import Path
 from typing import List, Tuple
+import geopandas as gpd
 
+def geojson_to_geopackage(path_from):
+    """
+    Reads geojson from geojson, and exports it as geopackage (with the same name)
+    """
+    gdf = gpd.read_file(path_from)
+    # Define output GeoPackage path
+    output_dir = "../../data/geopackage"
+    output_name = path_from.split("/")[-1].split(".")[-2]
+
+    os.makedirs(output_dir, exist_ok=True)
+    gpkg_path = os.path.join(output_dir, output_name+".gpkg")
+
+    # Write to GeoPackage
+    gdf.to_file(gpkg_path, driver="GPKG")
+    print(f"GeoPackage written to: {gpkg_path}")
+    print(f"Features: {len(gdf)}, CRS: {gdf.crs}")
 
 def read_to_3d(file_path: str) -> o3d.t.geometry.PointCloud:
     """

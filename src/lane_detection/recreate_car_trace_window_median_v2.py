@@ -72,12 +72,12 @@ def estimated_pos(points: np.ndarray, offset_from_ground: int = 1.7, segment_rad
     estimation1 =  np.median(points, axis=0)
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points[np.linalg.norm(points[:,:2]-estimation1[:2],axis=1)<segment_radius])
-    if (len(pcd.points) < 50):
-        print(f"Too few points! x: {estimation1[0]}, y: {estimation1[1]}")
-        return estimation1
     max_iterations = 5
     valid_plane_found = False    
     for attempt in range(max_iterations):
+        if (len(pcd.points) < 50):
+            print(f"Too few points! x: {estimation1[0]}, y: {estimation1[1]}")
+            return None
         plane_model, inliers = pcd.segment_plane(
             distance_threshold=0.05,
             ransac_n=3,
@@ -122,6 +122,7 @@ def estimated_pos(points: np.ndarray, offset_from_ground: int = 1.7, segment_rad
     x,y = estimation1[:2]
     ground_height = -(a*x+b*y+d)/c
     estimation2 =  np.median(points[points[:,2]<=ground_height+offset_from_ground], axis=0)
+    estimation2[2] = ground_height
     return estimation2
 
 
@@ -196,7 +197,8 @@ def recreate_trajectory(
         if len(filtered_points) > 0:
             # Calculate average location
             avg_location = estimated_pos(filtered_points)
-            trajectory.append((avg_location, current_time))
+            if avg_location is not None:
+                trajectory.append((avg_location, current_time))
         
         # Increment time
         current_time += time_step
