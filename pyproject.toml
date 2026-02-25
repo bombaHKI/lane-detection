@@ -7,6 +7,7 @@ authors = [
     { name = "Haála Kada", email = "kada.haala@tomtom.com" }
 ]
 dependencies = [
+    "geojson>=3.2.0",
     "laspy[laszip,lazrs]>=2.6.1",
     "numpy>=2.3.5",
     "open3d>=0.19.0",

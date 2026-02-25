@@ -36,6 +36,10 @@ In order to visualise the lidar with the cesium map, first we have to use a loca
 2. `entwine build -i cegl_m4_2_eov.laz -o ../lidar_ept/cegl_m4_2_eov`
 3. in the potree html file set: `pointcloudProjection = "+proj=somerc +lat_0=47.1443937222222 +lon_0=19.0485717777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs";`
 
+**Viewing geopackage**
+First we need to create geopackage files from the geojson, then load it potree.
+Example in `lidar_vis_markings.html`
+
 		
 
 ### Project Management

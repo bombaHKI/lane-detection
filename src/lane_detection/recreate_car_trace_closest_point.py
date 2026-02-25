@@ -134,7 +134,7 @@ def main():
     """Main entry point."""
 
     file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
-    output_path="data/geojson/car_trajectory_v2_pulse_closest_points.geojson"
+    output_path="data/geojson/car_trajectory_v3_pulse_closest_points.geojson"
     trajectory = recreate_trajectory(
         file_path=file_path,
         pulse_step=10
