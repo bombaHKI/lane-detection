@@ -22,11 +22,21 @@ For visualising this large lidar input I use use Potree viewer.
 The laz files have to be converted to ept tiles first.
 
 **Creating the ept tiles:** `entwine build -i 871e1d886ffffff_cegl_m4_2_ground.laz -o ../lidar_ept/871e1d886ffffff_cegl_m4_2_ground`
+(`export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH` for entwine linking issue)
 
 Reminder on how to view the ept files:
 - From 'data/lidar_ept': 'lidar_ept % http-server -p 8000 --cors'
 - From 'projects/potree/' (external): 'npm start'
 - Open 'http://localhost:1234/examples/lidar_vis.html'.
+
+
+**Viewing with cesium map**
+In order to visualise the lidar with the cesium map, first we have to use a local projection (`EPSG:23700` for Hungary)
+1. convert las to local projection: `pdal translate 871e1d886ffffff_cegl_m4_2.laz cegl_m4_2_eov.laz reprojection --filters.reprojection.in_srs="EPSG:3857" --filters.reprojection.out_srs="EPSG:23700"`
+2. `entwine build -i cegl_m4_2_eov.laz -o ../lidar_ept/cegl_m4_2_eov`
+3. in the potree html file set: `pointcloudProjection = "+proj=somerc +lat_0=47.1443937222222 +lon_0=19.0485717777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs";`
+
+		
 
 ### Project Management
 Using the credentials for uv: `export $(grep -v '^#' .secrets.env | xargs)`
