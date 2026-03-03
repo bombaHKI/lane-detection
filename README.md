@@ -18,15 +18,18 @@ Further details and progress will be documented as the project evolves.
 ### Instructions
 
 ### Lidar ept visualization
+The distortion around the area is ~1.5 compared to on equator in the epsg3857 coordinates.
 For visualising this large lidar input I use use Potree viewer.
 The laz files have to be converted to ept tiles first.
 
 **Creating the ept tiles:** `entwine build -i 871e1d886ffffff_cegl_m4_2_ground.laz -o ../lidar_ept/871e1d886ffffff_cegl_m4_2_ground`
+
 (`export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH` for entwine linking issue)
+(since then I run: `sudo install_name_tool -add_rpath /usr/local/lib /usr/local/bin/entwine`)
 
 Reminder on how to view the ept files:
-- From 'data/lidar_ept': 'lidar_ept % http-server -p 8000 --cors'
-- From 'projects/potree/' (external): 'npm start'
+- From `data/lidar_ept`: `lidar_ept % http-server -p 8000 --cors`
+- From 'projects/potree/' (external): `npm start`
 - Open 'http://localhost:1234/examples/lidar_vis.html'.
 
 
