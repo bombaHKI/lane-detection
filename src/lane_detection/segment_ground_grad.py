@@ -3,11 +3,10 @@ import open3d as o3d
 import numpy as np
 from collections import defaultdict
 
-from .utils import read_to_3d, export_pcd_to_laz
+from lane_detection.utils import read_to_3d, export_pcd_to_laz
 
 # Check if file exists
-file_path = "data/LiDaR/871e1d880ffffff_cegl_m4_3.laz"
-file_path = "data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
+file_path = "data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in.laz"
 las = laspy.read(file_path)
 pcd = read_to_3d(file_path)
 
@@ -41,7 +40,7 @@ for cell, indices in grid.items():
     k = int(np.ceil(0.1 * len(indices)))
 
     order = np.argsort(z_vals)
-    mid_idx = order[k:5*k]
+    mid_idx = order[:5*k]
 
     if len(mid_idx) < 3:
         continue
@@ -104,31 +103,13 @@ for cell, indices in grid.items():
     ground_mask = dist < 0.2  # 20 cm
     keep_mask[indices[ground_mask]] = True
 
-# Convert boolean mask to indices for tensor pointcloud
-ground_indices = np.where(keep_mask)[0]
-non_ground_indices = np.where(~keep_mask)[0]
 
-# Create new point clouds using indices
-ground_points = o3d.t.geometry.PointCloud()
-ground_points.point.positions = pcd.point.positions[ground_indices]
-ground_points.point.intensity = pcd.point.intensity[ground_indices]
-ground_points.point.colors = pcd.point.colors[ground_indices]
 
-# Copy other attributes
-for attr in pcd.point:
-    if attr not in ("positions", "colors", "intensity"):
-        ground_points.point[attr] = pcd.point[attr][ground_indices]
+print("writing to files")
+close_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
+close_points.points = las.points[keep_mask]
+close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in_ground.laz")
 
-non_ground_points = o3d.t.geometry.PointCloud()
-non_ground_points.point.positions = pcd.point.positions[non_ground_indices]
-non_ground_points.point.intensity = pcd.point.intensity[non_ground_indices]
-non_ground_points.point.colors = pcd.point.colors[non_ground_indices]
-
-# Copy other attributes
-for attr in pcd.point:
-    if attr not in ("positions", "colors", "intensity"):
-        non_ground_points.point[attr] = pcd.point[attr][non_ground_indices]
-
-export_pcd_to_laz(ground_points, "data/LiDaR/871e1d886ffffff_cegl_m4_2_ground.laz")
-export_pcd_to_laz(non_ground_points, "data/LiDaR/871e1d886ffffff_cegl_m4_2_non_ground.laz")
-
+close_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
+close_points.points = las.points[~keep_mask]
+close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in_non_ground.laz")
