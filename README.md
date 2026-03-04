@@ -13,6 +13,14 @@ The planned vague steps for creating lane dividers from LIDAR data:
 4. **Create Bird Eye View**
 5. **Detect Lane Borders**
 
+Current process:
+1. recreate car trace (4 algorithms)
+2. Drop points far from trace
+3. statistical outlier removal (based on neighbour distance)
+4. segment ground (on 5x5 squares, based on slope)
+5. max entropy tresholding on intensity value -> markings
+6. Do something with noisy marking points 
+
 Further details and progress will be documented as the project evolves.
 
 ### Instructions
