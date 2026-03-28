@@ -3,7 +3,7 @@ import open3d as o3d
 import open3d.core as o3c
 import numpy as np
 
-file_path = "data/LiDaR/871e1d886ffffff_cegl_m4_2_close_to_trace.laz"
+file_path = "data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in_ground_marking.laz"
 las = laspy.read(file_path)
 
 # 1. Define the device (Use CUDA:0 if you have a GPU, otherwise CPU:0)
@@ -17,7 +17,7 @@ positions_tensor = o3c.Tensor(las.xyz, o3c.float32, device)
 pcd.point.positions = positions_tensor
 
 print("starting sor (running on GPU...)")
-cl, ind = pcd.remove_statistical_outliers(nb_neighbors=10, std_ratio=1.1)
+cl, ind = pcd.remove_statistical_outliers(nb_neighbors=10, std_ratio=2.5)
 
 # 3. Bring the indices back to the CPU as a numpy array for boolean masking
 ind_np = ind.cpu().numpy().flatten()
@@ -29,8 +29,8 @@ mask[ind_np] = True
 print("writing to files")
 close_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
 close_points.points = las.points[mask]
-close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in.laz")
+close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in_ground_marking_sor_in.laz")
 
 close_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
 close_points.points = las.points[~mask]
-close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_out.laz")
+close_points.write("data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in_ground_marking_sor_out.laz")

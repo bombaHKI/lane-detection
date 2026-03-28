@@ -129,7 +129,6 @@ def recreate_trajectory(
     return trajectory
 
 def main():
-    """Main entry point."""
     file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
     output_path="data/geojson/car_trajectory_v2_pulse_line_intersection.geojson"
     trajectory = recreate_trajectory(
