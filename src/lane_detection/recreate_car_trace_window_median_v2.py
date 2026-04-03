@@ -6,7 +6,7 @@ import laspy
 import open3d as o3d
 from collections import defaultdict
 from timeit import default_timer as timer
-from lane_detection.utils import save_trajectory_geojson, build_pulse_map
+from lane_detection.utils_old import save_trajectory_geojson, build_pulse_map
 
 
 def find_points_in_time_window(
@@ -196,7 +196,7 @@ def recreate_trajectory(
 
         if len(filtered_points) > 0:
             # Calculate average location
-            avg_location = estimated_pos(filtered_points)
+            avg_location = estimated_pos(filtered_points, offset_from_ground=3)
             if avg_location is not None:
                 trajectory.append((avg_location, current_time))
         
@@ -215,7 +215,7 @@ def recreate_trajectory(
 def main():
     """Main entry point."""
     file_path="data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
-    output_path="data/geojson/car_trajectory_v1_window_median_ground_detect.geojson"
+    output_path="data/car_trace/geojson/car_trajectory_v1_window_median_ground_detect.geojson"
     trajectory = recreate_trajectory(
         file_path=file_path,
         initial_offset=4.0,

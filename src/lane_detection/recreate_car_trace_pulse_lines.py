@@ -6,7 +6,7 @@ from typing import Tuple, List, Optional, DefaultDict
 import laspy
 from collections import defaultdict
 from timeit import default_timer as timer
-from lane_detection.utils import save_trajectory_geojson, build_pulse_map
+from lane_detection.utils_old import save_trajectory_geojson, build_pulse_map
 
 def are_perpendicular(m1, m2, tolerance_degrees=20.0):
     # 1. Calculate the angle of each line relative to the x-axis

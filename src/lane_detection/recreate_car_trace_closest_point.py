@@ -6,7 +6,7 @@ from typing import Tuple, List, Optional, DefaultDict
 import laspy
 from collections import defaultdict
 from timeit import default_timer as timer
-from lane_detection.utils import save_trajectory_geojson, build_pulse_map
+from lane_detection.utils_old import save_trajectory_geojson, build_pulse_map
 
 def recreate_trajectory(
     file_path: str,

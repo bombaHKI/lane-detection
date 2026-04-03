@@ -7,7 +7,7 @@ from collections import defaultdict
 import json
 from timeit import default_timer as timer
 
-from lane_detection.utils import build_pulse_map
+from lane_detection.utils_old import build_pulse_map
 
 def extract_sector_lines(
     las: laspy.LasData,

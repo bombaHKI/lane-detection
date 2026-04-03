@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 from collections import defaultdict
 
-from .utils import read_to_3d, export_pcd_to_laz
+from .utils_old import read_to_3d, export_pcd_to_laz
 
 # Check if file exists
 file_path = "data/LiDaR/871e1d880ffffff_cegl_m4_3.laz"

@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 from collections import defaultdict
 
-from lane_detection.utils import read_to_3d, export_pcd_to_laz
+from lane_detection.utils_old import read_to_3d, export_pcd_to_laz
 
 # Check if file exists
 file_path = "data/LiDaR/871e1d886ffffff_cegl_m4_2_close_sor_in.laz"
