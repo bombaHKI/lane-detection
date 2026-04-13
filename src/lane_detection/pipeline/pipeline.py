@@ -1,5 +1,3 @@
-from lane_detection.utils.logger import create_logger
-
 class Pipeline:
     def __init__(self, stages):
         self.stages = stages
@@ -9,10 +7,8 @@ class Pipeline:
             stage.run(context)
         
 class Stage:
-    logger = create_logger('Stage')
     def run(self, context):
-        self.logger.info("This is a stage")
-        # raise NotImplementedError
+        raise NotImplementedError
     
 class Context:
     def __init__(self, las):

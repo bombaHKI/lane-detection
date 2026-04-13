@@ -3,5 +3,6 @@ data/
 .secrets.env
 uv.lock
 .DS_Store
+notebooks/exploration.ipynb
 
 __pycache__

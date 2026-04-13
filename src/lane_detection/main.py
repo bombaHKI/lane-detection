@@ -1,7 +1,8 @@
 import laspy
 from lane_detection.utils.logger import create_logger
 
-from lane_detection.pipeline.pipeline import Pipeline, Context, Stage, SubStage
+from lane_detection.pipeline.pipeline import Pipeline, Context
+from lane_detection.car_trace.trace_stage import CarTraceStage, window_median
 
 logger = create_logger('Main')
 
@@ -16,38 +17,26 @@ def read_point_cloud(lidar_path):
     return las
 
 def build_pipeline(config):
-    # trace_algo = create_trace_algorithm(config["trace"])
-
     return Pipeline([
-        Stage(),
-        SubStage(),
-        Stage(),
-        # TraceStage(trace_algo),
-
-        # WriteStage("after_trace"),
-
-        # BinningStage(**config["binning"]),
-        # WriteStage("after_binning"),
-
-        # SORProcessor(**config["sor"]),
-        # WriteSplitStage("sor", mode="delta"),
-
-        # GroundProcessor(),
-        # WriteSplitStage("ground", mode="delta"),
-
-        # WritePlanesStage(),
-
-        # ProjectionStage(**config["projection"]),
-        # LaneDetectionStage(),
+        CarTraceStage(window_median)
     ])
 
+
+from utils_old import save_trajectory_geojson
+
 def main():
-    logger.info("Starting main pipeline")
+    logger.info("Starting Pipeline")
     config = load_config("config/config.yaml")
-    point_cloud = read_point_cloud(config["point_path"])
-    context = Context(point_cloud)
+    las = read_point_cloud(config["point_path"])
+    context = Context(las)
+
     pipeline = build_pipeline(config)
+
     pipeline.run(context)
-    
+
+    trace = context.trace
+    save_trajectory_geojson(trace,'data/car_trace/geojson/refactor_median.geojson','')
+
+
 if __name__ == '__main__':
     main()
