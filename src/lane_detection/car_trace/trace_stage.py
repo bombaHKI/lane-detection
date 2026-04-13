@@ -1,6 +1,7 @@
 from typing import Tuple, List, Optional, DefaultDict
-import numpy as np
 from timeit import default_timer as timer
+import numpy as np
+import open3d as o3d
 
 from lane_detection.pipeline.pipeline import Stage
 from lane_detection.utils.logger import create_logger
@@ -94,7 +95,153 @@ def window_median(
     logger.info(f"Total trajectory points: {len(trajectory)}")
     
     if len(trajectory) == 0:
-        print("Warning: No trajectory points generated!")
+        logger.info("Warning: No trajectory points generated!")
+    
+    return trajectory
+
+def windows_median_v2(
+    point_cloud,
+    initial_offset: float = 4.0,
+    time_window: float = .1,
+    time_step: float = 0.5,
+    offset_from_ground: float = 2,
+    radius_around_1st_guess: float = 5
+) -> List[Tuple[np.ndarray, float]]:
+    """
+    Improvement to `wondow_median`: detect ground at 1st esimation, 
+    then consider points below a treshold
+    """
+
+    def estimated_pos(points: np.ndarray, offset_from_ground: int = 2, segment_radius: int = 5) -> Optional[np.ndarray]:
+        """
+        Calculate estimated position from given points.
+        Implementation: 
+        1. 1st estimation: median of xyz coordinates.
+        2. Ground detection around point.
+        3. Median of all points that are below ground+offset.
+        
+        Args:
+            points: Nx3 array of XYZ coordinates
+            offset_from_ground: Points above ground level + offset will not be considered in the estimation
+            segment_radius: segment ground in the radius of the first estimation
+            
+        Returns:
+            Median location [x, y, z] or None if no points
+        """
+        if len(points) == 0:
+            return None
+        estimation1 =  np.median(points, axis=0)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points[np.linalg.norm(points[:,:2]-estimation1[:2],axis=1)<segment_radius])
+        max_iterations = 5
+        valid_plane_found = False    
+        for attempt in range(max_iterations):
+            if (len(pcd.points) < 50):
+                logger.info(f"Too few points! x: {estimation1[0]}, y: {estimation1[1]}")
+                return None
+            plane_model, inliers = pcd.segment_plane(
+                distance_threshold=0.05,
+                ransac_n=3,
+                num_iterations=100
+            )
+
+            a, b, c, d = plane_model
+            
+            # Calculate gradient (slope) from plane normal
+            # Gradient = sqrt(a^2 + b^2) / |c|
+            # 40% gradient = 0.4 = tan(angle) ≈ 21.8 degrees
+            horizontal_component = np.sqrt(a**2 + b**2)
+            vertical_component = np.abs(c)
+            
+            if vertical_component < 1e-6:  # nearly vertical plane
+                gradient = float('inf')
+            else:
+                gradient = horizontal_component / vertical_component
+            
+            # Check if gradient is less than 40% (0.4)
+            if gradient < 0.4:
+                valid_plane_found = True
+                break
+            
+            # Remove inliers and try again with remaining points
+            if len(inliers) > 0:
+                remaining_mask = np.ones(len(pcd.points), dtype=bool)
+                remaining_mask[inliers] = False
+                remaining_points = np.asarray(pcd.points)[remaining_mask]
+                
+                if len(remaining_points) < 3:
+                    break
+                    
+                pcd.points = o3d.utility.Vector3dVector(remaining_points)
+            else:
+                break
+        
+        if not valid_plane_found:
+            logger.info(f"No ground segmented")
+            return estimation1
+
+        x,y = estimation1[:2]
+        ground_height = -(a*x+b*y+d)/c
+        estimation2 =  np.median(points[points[:,2]<=ground_height+offset_from_ground], axis=0)
+        estimation2[2] = ground_height
+        return estimation2
+
+    points = point_cloud.xyz  # Nx3 array
+    timestamps = point_cloud.gps_time  # GPS timestamps
+
+    
+    logger.info(f"Loaded {len(points)} points")
+    logger.info(f"Timestamp range: {timestamps.min():.3f} to {timestamps.max():.3f}")
+    logger.info(f"Duration: {(timestamps.max() - timestamps.min()):.3f} time units")
+    
+    # Initialize
+    min_timestamp = timestamps.min()
+    current_time = min_timestamp + initial_offset
+    max_timestamp = timestamps.max()
+    
+    trajectory = []
+    
+    start = timer()
+    logger.info(f"\nStarting trajectory reconstruction.")
+    logger.info(f"Initial time: {current_time:.3f}")
+    logger.info(f"Time window: ±{time_window} ms")
+    logger.info(f"Time step: {time_step} ms")
+
+    logger.info(f"Mapping points to time values")
+    time_to_points, unique_times = build_pulse_map(points, timestamps)
+    logger.info(f"Mapping done in {timer()-start} seconds")
+    
+    progress = 0
+    while current_time <= max_timestamp:
+        curr_progress = (current_time-min_timestamp)/(max_timestamp-min_timestamp)*100
+        if curr_progress >= progress+5:
+            progress+=5
+            logger.info(f"Progress: {curr_progress:.2f}%")
+
+        # Find points within time window and spatial constraints
+        filtered_points, filtered_times = find_points_in_time_window(
+            time_to_points, timestamps, unique_times, current_time, time_window
+        )
+
+        if len(filtered_points) > 0:
+            # Calculate average location
+            avg_location = estimated_pos(
+                filtered_points,
+                offset_from_ground=offset_from_ground,
+                segment_radius=radius_around_1st_guess
+            )
+            if avg_location is not None:
+                trajectory.append((avg_location, current_time))
+        
+        # Increment time
+        current_time += time_step
+    
+    logger.info(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
+    logger.info(f"Total trajectory points: {len(trajectory)}")
+    
+    if len(trajectory) == 0:
+        logger.info("Warning: No trajectory points generated!")
+        return trajectory
     
     return trajectory
 
