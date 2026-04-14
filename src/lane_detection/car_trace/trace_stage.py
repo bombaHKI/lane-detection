@@ -66,9 +66,7 @@ def window_median(
     logger.info(f"Time window: ±{time_window} ms")
     logger.info(f"Time step: {time_step} ms")
 
-    logger.info(f"Mapping points to time values")
     time_to_points, unique_times = build_pulse_map(xyz, timestamps)
-    logger.info(f"Mapping done in {timer()-start} seconds")
     
     progress = 0
     while current_time <= max_timestamp:
@@ -208,9 +206,7 @@ def windows_median_v2(
     logger.info(f"Time window: ±{time_window} ms")
     logger.info(f"Time step: {time_step} ms")
 
-    logger.info(f"Mapping points to time values")
     time_to_points, unique_times = build_pulse_map(points, timestamps)
-    logger.info(f"Mapping done in {timer()-start} seconds")
     
     progress = 0
     while current_time <= max_timestamp:
@@ -245,7 +241,6 @@ def windows_median_v2(
         return trajectory
     
     return trajectory
-
 
 def pulse_lines(
     point_cloud,
@@ -290,9 +285,7 @@ def pulse_lines(
     max_timestamp = timestamps.max()
 
     start = timer()
-    logger.info(f"Mapping points to time values")
     time_to_points, unique_times = build_pulse_map(points, timestamps)
-    logger.info(f"Mapping done in {timer()-start} seconds")
     logger.info(f"\nStarting trajectory reconstruction.")
     logger.info(f"Initial time: {current_time:.3f}")
     logger.info(f"Time step: {time_step} ms")
@@ -357,6 +350,97 @@ def pulse_lines(
     
     return trajectory
 
+def closest_point(
+    point_cloud,
+    pulse_step: int = 5,
+    window_size: int = 1,
+
+) -> List[Tuple[np.ndarray, float]]:
+    """
+    Recreate car trajectory from LiDAR GPS timestamps.
+
+    Adds the next pulse's closest point (to the current pos) to the trajectory.
+    The next pulse is pulse_step pulses.
+    
+    Args:
+        pulse_step: Distance between two consecutive pulses
+        
+    Returns:
+        List of (location, timestamp) tuples representing the trajectory
+    """
+    points = point_cloud.xyz
+    timestamps = point_cloud.gps_time
+    
+    print(f"Loaded {len(points)} points")
+    print(f"Timestamp range: {timestamps.min():.3f} to {timestamps.max():.3f}")
+    print(f"Duration: {(timestamps.max() - timestamps.min()):.3f} time units")
+    
+    # Initialize
+    min_timestamp = timestamps.min()
+    max_timestamp = timestamps.max()
+
+    start = timer()
+
+    time_to_points, unique_times = build_pulse_map(points, timestamps)
+
+    print(f"\nStarting trajectory reconstruction.")
+    
+    trajectory = []
+    pos_estimation = time_to_points[min_timestamp][0]
+    progress = 0
+    for curr_time in unique_times[::pulse_step]:
+        curr_progress = (curr_time-min_timestamp)/(max_timestamp-min_timestamp)*100
+        if curr_progress >= progress+5:
+            progress+=5
+            print(f"Progress: {progress:.2f}%")
+
+        curr_pulse = time_to_points[curr_time]
+        # Find the closest point in curr_pulse to the current pos_estimation
+        distances = np.linalg.norm(curr_pulse[:,:2] - pos_estimation[:2], axis=1)
+        closest_idx = np.argmin(distances)
+        pos_estimation = curr_pulse[closest_idx]
+        trajectory.append((pos_estimation.copy(), curr_time))
+    
+    print(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
+    print(f"Total trajectory points: {len(trajectory)}")
+    
+    if len(trajectory) == 0:
+        print("Warning: No trajectory points generated!")
+
+    def moving_avg_smoothing(trajectory: List[Tuple[np.ndarray, float]], window_size: int = 5) -> List[Tuple[np.ndarray, float]]:
+        """
+        Apply moving average smoothing to trajectory positions.
+        
+        Args:
+            trajectory: List of (location, timestamp) tuples
+            window_size: Size of the sliding window for averaging
+            
+        Returns:
+            Smoothed trajectory with same format as input
+        """
+        if len(trajectory) < window_size:
+            return trajectory
+        
+        points = np.array([pos for pos, _ in trajectory])
+        timestamps = np.array([ts for _, ts in trajectory])
+        
+        smoothed_points = np.zeros_like(points)
+        half_window = window_size // 2
+        
+        for i in range(len(points)):
+            start_idx = max(0, i - half_window)
+            end_idx = min(len(points), i + half_window + 1)
+            smoothed_points[i] = np.mean(points[start_idx:end_idx], axis=0)
+        
+        smoothed_trajectory = [(smoothed_points[i], timestamps[i]) for i in range(len(trajectory))]
+        
+        return smoothed_trajectory
+
+    if window_size > 1:
+        trajectory = moving_avg_smoothing(trajectory=trajectory, window_size=window_size)
+
+    return trajectory
+
 def build_pulse_map(points: np.ndarray, gps_times: list):
     """
     Builds a timestamp -> ndarray of points map
@@ -369,24 +453,19 @@ def build_pulse_map(points: np.ndarray, gps_times: list):
     Returns:
         the timestamp->points map and the `unique_timestamps` in the gps_times
     """
-    # 1. Sort by time (returns indices that would sort the array)
-    # This is the most expensive step: O(N log N)
+    start = timer()
+    logger.info(f"Mapping points to time values")
+
     sort_idx = np.argsort(gps_times)
     
-    # 2. Apply sorting to both arrays
     sorted_points = points[sort_idx]
     sorted_times = gps_times[sort_idx]
     
-    # 3. Find unique times and the split indices
-    # return_index=True gives the first index where each unique value appears
     unique_times, start_indices = np.unique(sorted_times, return_index=True)
     
-    # 4. Split the points array into chunks based on start indices
-    # We skip start_indices[0] because it's always 0 (the beginning)
     grouped_points = np.split(sorted_points, start_indices[1:])
     
-    # 5. Combine into a dictionary
-    # zip is fast here because we are zipping 412k items, not 104M
+    logger.info(f"Mapping done in {timer()-start} seconds")
     return dict(zip(unique_times, grouped_points)), unique_times
 
 def find_points_in_time_window(

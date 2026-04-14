@@ -1,8 +1,9 @@
 import laspy
-from lane_detection.utils.logger import create_logger
+from functools import partial
 
+from lane_detection.utils.logger import create_logger
 from lane_detection.pipeline.pipeline import Pipeline, Context
-from lane_detection.car_trace.trace_stage import CarTraceStage, window_median, windows_median_v2, pulse_lines
+from lane_detection.car_trace.trace_stage import CarTraceStage, window_median, windows_median_v2, pulse_lines, closest_point
 
 logger = create_logger('Main')
 
@@ -19,7 +20,7 @@ def read_point_cloud(lidar_path):
 
 def build_pipeline(config):
     return Pipeline([
-        CarTraceStage(pulse_lines)
+        CarTraceStage(lambda point_cloud: closest_point(point_cloud,10,601))
     ])
 
 
@@ -36,7 +37,7 @@ def main():
     pipeline.run(context)
 
     trace = context.trace
-    save_trajectory_geojson(trace,'data/car_trace/geojson/refactor_pulse_lines.geojson','')
+    save_trajectory_geojson(trace,'data/car_trace/geojson/refactor_closest.geojson','')
 
 
 if __name__ == '__main__':
