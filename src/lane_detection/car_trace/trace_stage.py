@@ -98,11 +98,11 @@ def window_median(
     
     return trajectory
 
-def windows_median_v2(
+def window_median_v2(
     point_cloud,
     initial_offset: float = 4.0,
     time_window: float = .1,
-    time_step: float = 0.5,
+    time_step: float = 0.6,
     offset_from_ground: float = 2,
     radius_around_1st_guess: float = 5
 ) -> List[Tuple[np.ndarray, float]]:
@@ -222,13 +222,13 @@ def windows_median_v2(
 
         if len(filtered_points) > 0:
             # Calculate average location
-            avg_location = estimated_pos(
+            pos = estimated_pos(
                 filtered_points,
                 offset_from_ground=offset_from_ground,
                 segment_radius=radius_around_1st_guess
             )
-            if avg_location is not None:
-                trajectory.append((avg_location, current_time))
+            if pos is not None:
+                trajectory.append((pos, current_time))
         
         # Increment time
         current_time += time_step
