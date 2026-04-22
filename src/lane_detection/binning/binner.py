@@ -83,7 +83,10 @@ class BinningStage(Stage):
         # --- Assign points to bins -------------------------------------------------------
         th = self.time_treshold
         bins: list[np.ndarray] = []
+        log_interval = max(1, n_bins // 10)
         for i in range(n_bins):
+            if i % log_interval == 0 or i == n_bins - 1:
+                logger.info(f"Assigning points to bins: {i + 1}/{n_bins} ({(i + 1) / n_bins * 100:.0f}%)")
             t_lo = vp_t[i] - th
             t_hi = vp_t[i + 1] + th
             lo = np.searchsorted(gps_sorted, t_lo, side='left')
