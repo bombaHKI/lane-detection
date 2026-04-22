@@ -14,13 +14,15 @@ class Context:
     def __init__(self, las):
         self.las = las
 
+        # window (number of bins)
+        self.window_size = None
+        self.window_shift = None
+
         # geometry
         self.trace = None
         self.bins = None
         self.windows = None
-        self.bin_planes = {}
 
         # masks
         self.global_mask = None
         self.prev_mask = None
-        self.mask = None
