@@ -25,7 +25,6 @@ class Context:
         # geometry
         self.trace = None
         self.bins = None
-        self.windows = None
 
         # masks
         self.global_mask = None
