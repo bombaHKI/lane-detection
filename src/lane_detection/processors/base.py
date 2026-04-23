@@ -29,5 +29,6 @@ class Processor(Stage):
             keep_mask = self.process_window(window_indices, context)
             global_mask[window_indices[keep_mask]] = True
 
+        context.prev_mask = context.global_mask
         context.global_mask = global_mask
         context.bins = [indices[global_mask[indices]] for indices in bins]
