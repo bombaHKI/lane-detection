@@ -4,5 +4,6 @@ data/
 uv.lock
 .DS_Store
 notebooks/exploration.ipynb
+todo.txt
 
 __pycache__
