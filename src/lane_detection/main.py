@@ -8,6 +8,7 @@ from lane_detection.car_trace.trace_stage import CarTraceStage, window_median, w
 from lane_detection.binning.binner import BinningStage
 from lane_detection.processors.trace_distance_filter import TraceDistanceFilterStage
 
+from lane_detection.io.setup import SetupOutputStage
 from lane_detection.io.writer import WriteCloudStage
 
 logger = create_logger('Main')
@@ -30,6 +31,7 @@ def read_point_cloud(lidar_path):
 
 def build_pipeline(config):
     return Pipeline([
+        SetupOutputStage(),
         CarTraceStage(window_median_v2),
         BinningStage(
             bin_length=config['bin_length'],
@@ -46,7 +48,7 @@ def main():
     logger.info("Starting Pipeline")
     config = load_config("config/config.yaml")
     las = read_point_cloud(config["point_path"])
-    context = Context(las)
+    context = Context(las, config=config)
     context.window_size = config['window_size']
     context.window_shift = config['window_shift']
 

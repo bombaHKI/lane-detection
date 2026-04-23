@@ -11,8 +11,12 @@ class Stage:
         raise NotImplementedError
     
 class Context:
-    def __init__(self, las):
+    def __init__(self, las, config=None):
         self.las = las
+        self.config = config
+
+        # output
+        self.output_dir = None
 
         # window (number of bins)
         self.window_size = None
