@@ -8,19 +8,6 @@ logger = create_logger('Trace Distance Filter Stage')
 _SEGMENT_MARGIN = 5  # number of extra trace segments to check on each side of a bin
 
 
-def _segment_distances(xs: np.ndarray, ys: np.ndarray, seg_start: np.ndarray, seg_vec: np.ndarray, seg_len2: np.ndarray) -> np.ndarray:
-    """Minimum distance from each point to the nearest of the given segments.
-    xs/ys: (N,), seg_*: (K, 2) / (K,)
-    """
-    pts = np.column_stack([xs, ys])                              # (N, 2)
-    diff    = pts[:, None, :] - seg_start[None, :, :]            # (N, K, 2)
-    t       = (diff * seg_vec[None, :, :]).sum(axis=2) / seg_len2  # (N, K)
-    t       = np.clip(t, 0.0, 1.0)
-    closest = seg_start[None, :, :] + t[:, :, None] * seg_vec[None, :, :]  # (N, K, 2)
-    dist2   = ((pts[:, None, :] - closest) ** 2).sum(axis=2)     # (N, K)
-    return np.sqrt(dist2.min(axis=1))                            # (N,)
-
-
 class TraceDistanceFilterStage(Stage):
     """Filter each bin's points to those within *distance* metres of the car
     trace (2-D XY).
@@ -34,6 +21,18 @@ class TraceDistanceFilterStage(Stage):
 
     def __init__(self, distance: float = 21.0):
         self.distance = float(distance)
+
+    def _segment_distances(self, xs: np.ndarray, ys: np.ndarray, seg_start: np.ndarray, seg_vec: np.ndarray, seg_len2: np.ndarray) -> np.ndarray:
+        """Minimum distance from each point to the nearest of the given segments.
+        xs/ys: (N,), seg_*: (K, 2) / (K,)
+        """
+        pts = np.column_stack([xs, ys])                              # (N, 2)
+        diff    = pts[:, None, :] - seg_start[None, :, :]            # (N, K, 2)
+        t       = (diff * seg_vec[None, :, :]).sum(axis=2) / seg_len2  # (N, K)
+        t       = np.clip(t, 0.0, 1.0)
+        closest = seg_start[None, :, :] + t[:, :, None] * seg_vec[None, :, :]  # (N, K, 2)
+        dist2   = ((pts[:, None, :] - closest) ** 2).sum(axis=2)     # (N, K)
+        return np.sqrt(dist2.min(axis=1))                            # (N,)
 
     def run(self, context):
         logger.info(f"Starting distance clipping with: {self.distance} meters.")
@@ -62,8 +61,12 @@ class TraceDistanceFilterStage(Stage):
 
         total_before = total_after = 0
         filtered: list[np.ndarray] = []
+        n_bins = len(context.bins)
+        log_interval = max(1, n_bins // 10)
 
         for bin_idx, indices in enumerate(context.bins):
+            if bin_idx % log_interval == 0 or bin_idx == n_bins - 1:
+                logger.info(f"Filtering bins: {bin_idx + 1}/{n_bins} ({(bin_idx + 1) / n_bins * 100:.0f}%)")
             total_before += indices.size
             if indices.size == 0:
                 filtered.append(indices)
@@ -75,7 +78,7 @@ class TraceDistanceFilterStage(Stage):
             seg_lo = max(0,      np.searchsorted(trace_t, t_lo, side='left')  - 1 - _SEGMENT_MARGIN)
             seg_hi = min(n_segs, np.searchsorted(trace_t, t_hi, side='right') + 1 + _SEGMENT_MARGIN)
 
-            dists = _segment_distances(
+            dists = self._segment_distances(
                 xs[indices], ys[indices],
                 seg_start[seg_lo:seg_hi],
                 seg_vec[seg_lo:seg_hi],
