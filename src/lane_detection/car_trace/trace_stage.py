@@ -14,7 +14,15 @@ class CarTraceStage(Stage):
         self.algorithm = algorithm
 
     def run(self, context):
+        logger.info(f"Starting trajectory reconstruction.")
+        start = timer()
         context.trace = self.algorithm(context.las)
+
+        logger.info(f"Trajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
+        logger.info(f"Total trajectory points: {len(context.trace)}")
+        
+        if len(context.trace) == 0:
+            logger.info("Warning: No trajectory points generated!")
 
 def window_median(
     point_cloud,
@@ -59,12 +67,6 @@ def window_median(
     max_timestamp = timestamps.max()
     
     trajectory = []
-    
-    start = timer()
-    logger.info(f"\nStarting trajectory reconstruction.")
-    logger.info(f"Initial time: {current_time:.3f}")
-    logger.info(f"Time window: ±{time_window} ms")
-    logger.info(f"Time step: {time_step} ms")
 
     time_to_points, unique_times = build_pulse_map(xyz, timestamps)
     
@@ -89,12 +91,6 @@ def window_median(
         
         # Increment time
         current_time += time_step
-    
-    logger.info(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
-    logger.info(f"Total trajectory points: {len(trajectory)}")
-    
-    if len(trajectory) == 0:
-        logger.info("Warning: No trajectory points generated!")
     
     return trajectory
 
@@ -187,11 +183,6 @@ def window_median_v2(
 
     points = point_cloud.xyz  # Nx3 array
     timestamps = point_cloud.gps_time  # GPS timestamps
-
-    
-    logger.info(f"Loaded {len(points)} points")
-    logger.info(f"Timestamp range: {timestamps.min():.3f} to {timestamps.max():.3f}")
-    logger.info(f"Duration: {(timestamps.max() - timestamps.min()):.3f} time units")
     
     # Initialize
     min_timestamp = timestamps.min()
@@ -199,12 +190,6 @@ def window_median_v2(
     max_timestamp = timestamps.max()
     
     trajectory = []
-    
-    start = timer()
-    logger.info(f"\nStarting trajectory reconstruction.")
-    logger.info(f"Initial time: {current_time:.3f}")
-    logger.info(f"Time window: ±{time_window} ms")
-    logger.info(f"Time step: {time_step} ms")
 
     time_to_points, unique_times = build_pulse_map(points, timestamps)
     
@@ -232,13 +217,6 @@ def window_median_v2(
         
         # Increment time
         current_time += time_step
-    
-    logger.info(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
-    logger.info(f"Total trajectory points: {len(trajectory)}")
-    
-    if len(trajectory) == 0:
-        logger.info("Warning: No trajectory points generated!")
-        return trajectory
     
     return trajectory
 
@@ -275,20 +253,12 @@ def pulse_lines(
     points = point_cloud.xyz
     timestamps = point_cloud.gps_time
     
-    logger.info(f"Loaded {len(points)} points")
-    logger.info(f"Timestamp range: {timestamps.min():.3f} to {timestamps.max():.3f}")
-    logger.info(f"Duration: {(timestamps.max() - timestamps.min()):.3f} time units")
-    
     # Initialize
     min_timestamp = timestamps.min()
     current_time = min_timestamp + initial_offset
     max_timestamp = timestamps.max()
 
-    start = timer()
     time_to_points, unique_times = build_pulse_map(points, timestamps)
-    logger.info(f"\nStarting trajectory reconstruction.")
-    logger.info(f"Initial time: {current_time:.3f}")
-    logger.info(f"Time step: {time_step} ms")
     
     trajectory = []
     progress = 0
@@ -341,13 +311,6 @@ def pulse_lines(
 
         current_time += time_step
     
-    logger.info(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
-    logger.info(f"Total trajectory points: {len(trajectory)}")
-    
-    if len(trajectory) == 0:
-        logger.info("Warning: No trajectory points generated!")
-        return trajectory
-    
     return trajectory
 
 def closest_point(
@@ -371,19 +334,10 @@ def closest_point(
     points = point_cloud.xyz
     timestamps = point_cloud.gps_time
     
-    print(f"Loaded {len(points)} points")
-    print(f"Timestamp range: {timestamps.min():.3f} to {timestamps.max():.3f}")
-    print(f"Duration: {(timestamps.max() - timestamps.min()):.3f} time units")
-    
-    # Initialize
     min_timestamp = timestamps.min()
     max_timestamp = timestamps.max()
 
-    start = timer()
-
     time_to_points, unique_times = build_pulse_map(points, timestamps)
-
-    print(f"\nStarting trajectory reconstruction.")
     
     trajectory = []
     pos_estimation = time_to_points[min_timestamp][0]
@@ -392,7 +346,7 @@ def closest_point(
         curr_progress = (curr_time-min_timestamp)/(max_timestamp-min_timestamp)*100
         if curr_progress >= progress+5:
             progress+=5
-            print(f"Progress: {progress:.2f}%")
+            logger.info(f"Progress: {progress:.2f}%")
 
         curr_pulse = time_to_points[curr_time]
         # Find the closest point in curr_pulse to the current pos_estimation
@@ -400,12 +354,6 @@ def closest_point(
         closest_idx = np.argmin(distances)
         pos_estimation = curr_pulse[closest_idx]
         trajectory.append((pos_estimation.copy(), curr_time))
-    
-    print(f"\nTrajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
-    print(f"Total trajectory points: {len(trajectory)}")
-    
-    if len(trajectory) == 0:
-        print("Warning: No trajectory points generated!")
 
     def moving_avg_smoothing(trajectory: List[Tuple[np.ndarray, float]], window_size: int = 5) -> List[Tuple[np.ndarray, float]]:
         """
