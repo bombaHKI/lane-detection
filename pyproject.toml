@@ -1,7 +1,7 @@
 [project]
 name = "lane-detection"
 version = "0.1.0"
-description = "Thesis project for generating annotations"
+description = "Thesis project for lane geometry detection from LIDAR data"
 readme = "README.md"
 authors = [
     { name = "Haála Kada", email = "kada.haala@tomtom.com" }
