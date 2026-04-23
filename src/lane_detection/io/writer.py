@@ -14,14 +14,21 @@ class WriteCloudStage(Stage):
         output_dir = context.output_dir
         las = context.las
 
-        in_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
-        in_points.points = las.points[context.global_mask]
-        inlier_name = output_dir / f"{self.file_name}_in.laz"
-        in_points.write(inlier_name)
-        logger.info(f"Written to: {inlier_name}")
+        if context.global_mask is None:
+            logger.info("global_mask is not set; skipping write.")
+            return
 
-        out_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
-        out_points.points = las.points[~context.global_mask]
-        outlier_name = output_dir / f"{self.file_name}_out.laz"
-        out_points.write(outlier_name)
-        logger.info(f"Written to: {outlier_name}")
+        try:
+            in_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
+            in_points.points = las.points[context.global_mask]
+            inlier_name = output_dir / f"{self.file_name}_in.laz"
+            in_points.write(inlier_name)
+            logger.info(f"Written to: {inlier_name}")
+
+            out_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
+            out_points.points = las.points[~context.global_mask]
+            outlier_name = output_dir / f"{self.file_name}_out.laz"
+            out_points.write(outlier_name)
+            logger.info(f"Written to: {outlier_name}")
+        except Exception as e:
+            logger.info(f"Failed to write point clouds: {e}")
