@@ -1,5 +1,6 @@
 from typing import Tuple, List, Optional, DefaultDict
 from timeit import default_timer as timer
+from pathlib import Path
 import numpy as np
 from numpy.linalg import LinAlgError
 import open3d as o3d
@@ -10,17 +11,35 @@ from lane_detection.utils.logger import create_logger
 logger = create_logger('Car Trace Stage')
 
 class CarTraceStage(Stage):
-    def __init__(self, algorithm):
+    def __init__(self, algorithm, load_path=None):
         self.algorithm = algorithm
+        self.load_path = Path(load_path) if load_path else None
 
     def run(self, context):
+        if self.load_path is not None:
+            try:
+                logger.info(f"Loading trace from: {self.load_path}")
+                data = np.load(self.load_path)
+                context.trace = [(xyz, t) for xyz, t in zip(data['positions'], data['timestamps'])]
+                logger.info(f"Loaded {len(context.trace)} trajectory points.")
+                return
+            except Exception as e:
+                logger.info(f"Failed to load trace: {e}. Computing instead.")
+
         logger.info(f"Starting trajectory reconstruction.")
         start = timer()
         context.trace = self.algorithm(context.las)
 
         logger.info(f"Trajectory reconstruction complete! Took: {(timer()-start):.2f} seconds")
         logger.info(f"Total trajectory points: {len(context.trace)}")
-        
+
+        if context.output_dir is not None and len(context.trace) > 0:
+            path = context.output_dir / "trace.npz"
+            positions = np.array([p[0] for p in context.trace])
+            timestamps = np.array([p[1] for p in context.trace])
+            np.savez(path, positions=positions, timestamps=timestamps)
+            logger.info(f"Trace saved to: {path}")
+
         if len(context.trace) == 0:
             logger.info("Warning: No trajectory points generated!")
 
