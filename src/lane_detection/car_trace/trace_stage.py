@@ -310,13 +310,12 @@ def _pulse_lines(
         search_end = min(idx1 + 1 + max_pulse_search, n)
         while idx2 < search_end:
             candidate, cand_pulse, idx2 = fit_pulse_line(idx2, search_end)
-            if candidate is None:
+            if candidate is None or not are_perpendicular(line1[0], candidate[0], perpendicular_tolerance_deg):
+                idx2 += 1
                 continue
-            if are_perpendicular(line1[0], candidate[0], perpendicular_tolerance_deg):
-                line2 = candidate
-                pulse2 = cand_pulse
-                break
-            idx2 += 1
+            line2 = candidate
+            pulse2 = cand_pulse
+            break
 
         if line2 is not None and pulse2 is not None:
             m1, b1 = line1
