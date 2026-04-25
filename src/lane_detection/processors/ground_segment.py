@@ -27,6 +27,7 @@ import numpy as np
 import open3d as o3d
 
 from lane_detection.pipeline.pipeline import Stage
+from lane_detection.utils.grid import build_grid
 from lane_detection.utils.logger import create_logger
 
 logger = create_logger('Ground Segment Stage')
@@ -96,33 +97,6 @@ def _fit_grad(points, distance_threshold, max_gradient, max_iterations=5):
 
 
 # --------------------------------------------------------------------------- #
-# Grid construction
-# --------------------------------------------------------------------------- #
-
-def _build_grid(points: np.ndarray, square_size: float):
-    """Group point-indices by their (gx, gy) grid cell. Returns dict {(gx, gy): np.ndarray}."""
-    gx = np.floor(points[:, 0] / square_size).astype(np.int64)
-    gy = np.floor(points[:, 1] / square_size).astype(np.int64)
-
-    # Pack (gx, gy) into a single int64 key, sort, then split at boundaries
-    gy_range = int(gy.max() - gy.min()) + 1
-    keys = (gx - gx.min()) * gy_range + (gy - gy.min())
-
-    order = np.argsort(keys, kind='stable')
-    sorted_keys = keys[order]
-    splits = np.flatnonzero(np.diff(sorted_keys)) + 1
-    groups = np.split(order, splits)
-    unique_keys = sorted_keys[np.concatenate(([0], splits))]
-
-    gy_min = int(gy.min())
-    gx_min = int(gx.min())
-    return {
-        (int(k // gy_range) + gx_min, int(k % gy_range) + gy_min): g
-        for k, g in zip(unique_keys, groups)
-    }
-
-
-# --------------------------------------------------------------------------- #
 # Stage
 # --------------------------------------------------------------------------- #
 
@@ -159,7 +133,7 @@ class GroundSegmentStage(Stage):
             logger.info("No active points; skipping.")
             return
 
-        grid = _build_grid(active_pts, self.square_size)
+        grid = build_grid(active_pts, self.square_size)
         logger.info(f"Grid built: {len(grid)} cells over {len(active_idx)} points.")
 
         if self.method == 'propagate':
