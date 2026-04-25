@@ -67,11 +67,6 @@ def _plane_gradient(a: float, b: float) -> float:
     return float(np.hypot(a, b))
 
 
-def _plane_z(plane, x, y):
-    a, b, c = plane
-    return a * x + b * y + c
-
-
 # --------------------------------------------------------------------------- #
 # Per-square fitting strategies
 # --------------------------------------------------------------------------- #
