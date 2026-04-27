@@ -1,16 +1,15 @@
-"""Per-cell intensity thresholding using Kapur's maximum entropy method.
+"""Per-window intensity thresholding using Kapur's maximum entropy method.
 
-Each active point is binned into a 2-D grid (default 1x1 m). Within each cell,
+For each window (built by :class:`Processor` from bins + window params),
 Kapur's max-entropy threshold is computed from the intensity histogram and
-points with intensity above ``theta_max - offset`` (clamped to a small minimum)
+points with intensity above ``theta_max - offset`` (clamped to ``min_threshold``)
 are kept.
 """
 from __future__ import annotations
 
 import numpy as np
 
-from lane_detection.pipeline.pipeline import Stage
-from lane_detection.utils.grid import build_grid
+from lane_detection.processors.base import Processor
 from lane_detection.utils.logger import create_logger
 
 logger = create_logger('Intensity Threshold Stage')
@@ -43,74 +42,32 @@ def _kapur_threshold(intensities: np.ndarray) -> float | None:
     return float(val[int(np.argmax(Phi))])
 
 
-class IntensityThresholdStage(Stage):
-    """Keep points whose intensity exceeds the per-cell Kapur threshold.
+class IntensityThresholdStage(Processor):
+    """Keep points whose intensity exceeds the per-window Kapur threshold.
 
     Parameters
     ----------
-    square_size : float, default 1.0
-        Edge length of each grid cell (metres).
     offset : float, default 20.0
-        Subtracted from each cell's threshold (so more points are kept).
+        Subtracted from each window's threshold (so more points are kept).
     min_threshold : float, default 20.0
-        Lower clamp for the per-cell threshold after applying ``offset``.
+        Lower clamp for the threshold after applying ``offset``.
     """
 
     def __init__(
         self,
-        square_size: float = 1.0,
         offset: float = 20.0,
         min_threshold: float = 20.0,
     ):
-        self.square_size = float(square_size)
         self.offset = float(offset)
         self.min_threshold = float(min_threshold)
 
-    def run(self, context):
-        logger.info(
-            f"Intensity threshold: square_size={self.square_size}, "
-            f"offset={self.offset}, min_threshold={self.min_threshold}"
-        )
-        las = context.las
-        xyz = las.xyz
-        intensities = np.asarray(las.intensity)
+    def process_window(self, indices: np.ndarray, context) -> np.ndarray:
+        intensities = np.asarray(context.las.intensity)
+        window_int = intensities[indices]
 
-        if context.global_mask is not None:
-            active_idx = np.nonzero(context.global_mask)[0]
-        else:
-            active_idx = np.arange(len(xyz), dtype=np.int64)
+        theta = _kapur_threshold(window_int)
+        if theta is None:
+            return np.ones(indices.size, dtype=bool)
 
-        if active_idx.size == 0:
-            logger.info("No active points; skipping.")
-            return
-
-        active_pts = xyz[active_idx]
-        active_int = intensities[active_idx]
-
-        grid = build_grid(active_pts, self.square_size)
-        logger.info(f"Grid built: {len(grid)} cells over {active_idx.size} points.")
-
-        keep_local = np.zeros(active_idx.size, dtype=bool)
-        n = len(grid)
-        log_step = max(1, n // 10)
-
-        for i, (cell, indices) in enumerate(grid.items()):
-            if i % log_step == 0 or i == n - 1:
-                logger.info(f"Thresholding cells: {i + 1}/{n} ({(i + 1) / n * 100:.0f}%)")
-            cell_int = active_int[indices]
-            theta = _kapur_threshold(cell_int)
-            if theta is None:
-                continue
-            threshold = max(theta - self.offset, self.min_threshold)
-            keep_local[indices[cell_int > threshold]] = True
-
-        global_mask = np.zeros(len(xyz), dtype=bool)
-        global_mask[active_idx[keep_local]] = True
-
-        kept = int(global_mask.sum())
-        logger.info(f"Intensity threshold kept {kept}/{active_idx.size} points.")
-
-        context.prev_mask = context.global_mask
-        context.global_mask = global_mask
-        if context.bins is not None:
-            context.bins = [idx[global_mask[idx]] for idx in context.bins]
+        threshold = max(theta - self.offset, self.min_threshold)
+        return window_int > threshold

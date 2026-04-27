@@ -1,6 +1,10 @@
 import numpy as np
 
 from lane_detection.pipeline.pipeline import Stage
+from lane_detection.utils.logger import create_logger
+
+logger = create_logger('Processor')
+
 
 class Processor(Stage):
     def process_window(self, indices: np.ndarray, context) -> np.ndarray:
@@ -20,14 +24,23 @@ class Processor(Stage):
             windows.append(np.unique(combined))
             start += window_shift
 
+        n_windows = len(windows)
+        logger.info(f"Processing {n_windows} windows (size={window_size}, shift={window_shift}).")
+
         n_points = len(context.las.x)
         global_mask = np.zeros(n_points, dtype=bool)
+        log_step = max(1, n_windows // 10)
 
-        for window_indices in windows:
+        for i, window_indices in enumerate(windows):
+            if i % log_step == 0 or i == n_windows - 1:
+                logger.info(f"Window {i + 1}/{n_windows} ({(i + 1) / n_windows * 100:.0f}%)")
             if window_indices.size == 0:
                 continue
             keep_mask = self.process_window(window_indices, context)
             global_mask[window_indices[keep_mask]] = True
+
+        kept = int(global_mask.sum())
+        logger.info(f"Processor done: kept {kept}/{n_points} points.")
 
         context.prev_mask = context.global_mask
         context.global_mask = global_mask
