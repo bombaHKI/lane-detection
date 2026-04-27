@@ -1,13 +1,14 @@
 [project]
 name = "lane-detection"
 version = "0.1.0"
-description = "Thesis project for generating annotations"
+description = "Thesis project for lane geometry detection from LIDAR data"
 readme = "README.md"
 authors = [
     { name = "Haála Kada", email = "kada.haala@tomtom.com" }
 ]
 dependencies = [
     "geojson>=3.2.0",
+    "geopandas>=1.1.3",
     "laspy[laszip,lazrs]>=2.6.1",
     "numpy>=2.3.5",
     "open3d>=0.19.0",
