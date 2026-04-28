@@ -29,38 +29,11 @@ import open3d as o3d
 from lane_detection.pipeline.pipeline import Stage
 from lane_detection.utils.grid import build_grid
 from lane_detection.utils.logger import create_logger
-
-logger = create_logger('Ground Segment Stage')
-
+from lane_detection.utils.plane_fitting import fit_plane_ransac
 
 # --------------------------------------------------------------------------- #
 # Plane helpers
 # --------------------------------------------------------------------------- #
-
-def _fit_plane_ransac(points: np.ndarray, residual_threshold: float = 0.05):
-    """Fit z = a*x + b*y + c with RANSAC via open3d. Returns (a, b, c, inlier_mask) or None."""
-    if len(points) < 3:
-        return None
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
-    try:
-        plane_model, inlier_list = pcd.segment_plane(
-            distance_threshold=residual_threshold,
-            ransac_n=3,
-            num_iterations=60,
-        )
-    except Exception:
-        return None
-    # open3d plane: px*x + py*y + pz*z + pd = 0  =>  z = -(px*x + py*y + pd) / pz
-    px, py, pz, pd = plane_model
-    if abs(pz) < 1e-9:   # near-vertical plane, can't express as z = f(x,y)
-        return None
-    a = -px / pz
-    b = -py / pz
-    c = -pd / pz
-    inlier_mask = np.zeros(len(points), dtype=bool)
-    inlier_mask[inlier_list] = True
-    return float(a), float(b), float(c), inlier_mask
 
 
 def _plane_gradient(a: float, b: float) -> float:
@@ -73,7 +46,7 @@ def _plane_gradient(a: float, b: float) -> float:
 # --------------------------------------------------------------------------- #
 
 def _fit_basic(points, distance_threshold):
-    res = _fit_plane_ransac(points, distance_threshold)
+    res = fit_plane_ransac(points, distance_threshold)
     if res is None:
         return None
     a, b, c, _ = res
@@ -85,7 +58,7 @@ def _fit_grad(points, distance_threshold, max_gradient, max_iterations=5):
     for _ in range(max_iterations):
         if len(remaining) < 3:
             return None
-        res = _fit_plane_ransac(remaining, distance_threshold)
+        res = fit_plane_ransac(remaining, distance_threshold)
         if res is None:
             return None
         a, b, c, inliers = res
@@ -109,6 +82,7 @@ class GroundSegmentStage(Stage):
         fit_threshold: float = 0.05,
         max_gradient: float = 0.4,
     ):
+        super().__init__()
         if method not in ('basic', 'grad', 'propagate'):
             raise ValueError(f"Unknown ground-segment method: {method}")
         self.square_size = float(square_size)
@@ -119,7 +93,7 @@ class GroundSegmentStage(Stage):
 
     # --------------------------------------------------------------------- #
     def run(self, context):
-        logger.info(f"Ground segmentation: method={self.method}, square_size={self.square_size}")
+        self.logger.info(f"Ground segmentation: method={self.method}, square_size={self.square_size}")
         xyz = context.las.xyz
 
         # Work on currently-included points
@@ -130,11 +104,11 @@ class GroundSegmentStage(Stage):
         active_pts = xyz[active_idx]
 
         if len(active_idx) == 0:
-            logger.info("No active points; skipping.")
+            self.logger.info("No active points; skipping.")
             return
 
         grid = build_grid(active_pts, self.square_size)
-        logger.info(f"Grid built: {len(grid)} cells over {len(active_idx)} points.")
+        self.logger.info(f"Grid built: {len(grid)} cells over {len(active_idx)} points.")
 
         if self.method == 'propagate':
             ground_local = self._run_propagate(active_pts, grid, context)
@@ -145,7 +119,7 @@ class GroundSegmentStage(Stage):
         global_mask[active_idx[ground_local]] = True
 
         kept = int(global_mask.sum())
-        logger.info(f"Ground points: {kept}/{len(active_idx)}")
+        self.logger.info(f"Ground points: {kept}/{len(active_idx)}")
 
         context.prev_mask = context.global_mask
         context.global_mask = global_mask
@@ -161,7 +135,7 @@ class GroundSegmentStage(Stage):
         log_step = max(1, n // 10)
         for i, (cell, indices) in enumerate(grid.items()):
             if i % log_step == 0 or i == n - 1:
-                logger.info(f"Fitting cells: {i + 1}/{n} ({(i + 1) / n * 100:.0f}%)")
+                self.logger.info(f"Fitting cells: {i + 1}/{n} ({(i + 1) / n * 100:.0f}%)")
             pts = active_pts[indices]
             plane = fit(pts, self.fit_threshold) if self.method == 'basic' \
                 else fit(pts, self.fit_threshold, self.max_gradient)
@@ -178,7 +152,7 @@ class GroundSegmentStage(Stage):
         # Seed cells from trace
         trace = context.trace
         if not trace:
-            logger.info("No trace available; falling back to 'grad' method.")
+            self.logger.info("No trace available; falling back to 'grad' method.")
             self.method = 'grad'
             return self._run_independent(active_pts, grid)
 
@@ -193,7 +167,7 @@ class GroundSegmentStage(Stage):
                 seed_cells.append(cell)
 
         if not seed_cells:
-            logger.info("No trace cell overlaps grid; falling back to 'grad' method.")
+            self.logger.info("No trace cell overlaps grid; falling back to 'grad' method.")
             self.method = 'grad'
             return self._run_independent(active_pts, grid)
 
@@ -212,7 +186,7 @@ class GroundSegmentStage(Stage):
             cell = queue.popleft()
             processed += 1
             if processed % log_step == 0:
-                logger.info(f"Propagating: {processed}/{total} cells visited "
+                self.logger.info(f"Propagating: {processed}/{total} cells visited "
                             f"({processed / total * 100:.0f}%)")
 
             indices = grid[cell]
@@ -240,7 +214,7 @@ class GroundSegmentStage(Stage):
 
         unreached = total - len(queued)
         if unreached:
-            logger.info(f"{unreached} cells unreachable from trace; left unprocessed.")
+            self.logger.info(f"{unreached} cells unreachable from trace; left unprocessed.")
         return ground
 
     # --------------------------------------------------------------------- #

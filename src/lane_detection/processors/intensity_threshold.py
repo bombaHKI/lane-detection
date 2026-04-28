@@ -12,8 +12,6 @@ import numpy as np
 from lane_detection.processors.base import Processor
 from lane_detection.utils.logger import create_logger
 
-logger = create_logger('Intensity Threshold Stage')
-
 
 def _kapur_threshold(intensities: np.ndarray) -> float | None:
     """Return the max-entropy intensity threshold (Kapur's method) or None."""
@@ -58,6 +56,8 @@ class IntensityThresholdStage(Processor):
         offset: float = 20.0,
         min_threshold: float = 20.0,
     ):
+        
+        super().__init__()
         self.offset = float(offset)
         self.min_threshold = float(min_threshold)
 

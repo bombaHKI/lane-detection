@@ -3,8 +3,6 @@ import numpy as np
 from lane_detection.pipeline.pipeline import Stage
 from lane_detection.utils.logger import create_logger
 
-logger = create_logger('Trace Distance Filter Stage')
-
 _SEGMENT_MARGIN = 5  # number of extra trace segments to check on each side of a bin
 
 
@@ -20,6 +18,7 @@ class TraceDistanceFilterStage(Stage):
     """
 
     def __init__(self, distance: float = 21.0):
+        super().__init__()
         self.distance = float(distance)
 
     def _segment_distances(self, xs: np.ndarray, ys: np.ndarray, seg_start: np.ndarray, seg_vec: np.ndarray, seg_len2: np.ndarray) -> np.ndarray:
@@ -35,14 +34,14 @@ class TraceDistanceFilterStage(Stage):
         return np.sqrt(dist2.min(axis=1))                            # (N,)
 
     def run(self, context):
-        logger.info(f"Starting distance clipping with: {self.distance} meters.")
+        self.logger.info(f"Starting distance clipping with: {self.distance} meters.")
         if not context.bins:
-            logger.info("No bins to filter.")
+            self.logger.info("No bins to filter.")
             return
 
         trace = context.trace
         if trace is None or len(trace) < 2:
-            logger.info("Trace unavailable; skipping distance filter.")
+            self.logger.info("Trace unavailable; skipping distance filter.")
             return
 
         polyline  = np.asarray([p[0][:2] for p in trace], dtype=np.float64)
@@ -66,7 +65,7 @@ class TraceDistanceFilterStage(Stage):
 
         for bin_idx, indices in enumerate(context.bins):
             if bin_idx % log_interval == 0 or bin_idx == n_bins - 1:
-                logger.info(f"Filtering bins: {bin_idx + 1}/{n_bins} ({(bin_idx + 1) / n_bins * 100:.0f}%)")
+                self.logger.info(f"Filtering bins: {bin_idx + 1}/{n_bins} ({(bin_idx + 1) / n_bins * 100:.0f}%)")
             total_before += indices.size
             if indices.size == 0:
                 filtered.append(indices)
@@ -88,7 +87,7 @@ class TraceDistanceFilterStage(Stage):
             filtered.append(keep)
             total_after += keep.size
 
-        logger.info(
+        self.logger.info(
             f"Trace distance filter (d<={self.distance} m): "
             f"{total_before} -> {total_after} points across {len(filtered)} bins."
         )

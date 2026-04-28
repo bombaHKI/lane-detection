@@ -15,7 +15,10 @@ class WriteCloudStage(Stage):
         las = context.las
 
         if context.global_mask is None:
-            logger.info("global_mask is not set; skipping write.")
+            logger.info("global_mask is not set, writing all points.")
+            inlier_name = output_dir / f"{self.file_name}_all.laz"
+            las.write(inlier_name)
+            logger.info(f"Written to: {inlier_name}")
             return
 
         try:

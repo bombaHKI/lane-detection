@@ -20,8 +20,7 @@ class BinningStage(Stage):
     ``context.bins`` is set to ``list[np.ndarray]`` of int64 indices into the LAS arrays.
     """
 
-    def __init__(self, bin_length: float = 20.0, time_treshold: float = 10.0):
-        self.bin_length = float(bin_length)
+    def __init__(self, time_treshold: float = 10.0):
         self.time_treshold = float(time_treshold)
 
     def run(self, context):
@@ -42,15 +41,15 @@ class BinningStage(Stage):
         cum = np.concatenate(([0.0], np.cumsum(seg_len)))
         total_length = cum[-1]
 
-        if total_length < self.bin_length:
+        if total_length < context.bin_length:
             logger.info(
-                f"Trace length {total_length:.2f} < bin_length {self.bin_length}; no bins.")
+                f"Trace length {total_length:.2f} < bin_length {context.bin_length}; no bins.")
             context.bins = []
             return
 
         # Virtual (boundary) points every bin_length, including the final boundary.
-        n_boundaries = int(np.floor(total_length / self.bin_length)) + 1
-        s_vals = np.arange(n_boundaries, dtype=np.float64) * self.bin_length
+        n_boundaries = int(np.floor(total_length / context.bin_length)) + 1
+        s_vals = np.arange(n_boundaries, dtype=np.float64) * context.bin_length
         vp_x = np.interp(s_vals, cum, trace_xy[:, 0])
         vp_y = np.interp(s_vals, cum, trace_xy[:, 1])
         vp_t = np.interp(s_vals, cum, trace_t)
@@ -69,7 +68,7 @@ class BinningStage(Stage):
         n_bins = len(vp) - 1
         logger.info(
             f"Resampled trace: length={total_length:.2f} m, "
-            f"bin_length={self.bin_length} m, n_bins={n_bins}")
+            f"bin_length={context.bin_length} m, n_bins={n_bins}")
 
         # --- Pull LAS arrays once (avoid re-materialising ScaledArrayView per access) ----
         gps = np.asarray(las.gps_time, dtype=np.float64)
