@@ -1,17 +1,3 @@
-"""Ground segmentation as a pipeline stage.
-
-Three algorithms are supported via the ``method`` parameter:
-
-* ``'basic'``    — fit a plane in each grid square with RANSAC once.
-* ``'grad'``     — same, but reject planes that are too steep and retry by
-                    dropping the inliers and re-fitting until a plane with
-                    gradient < ``max_gradient`` is found or RANSAC gives up.
-
-All three operate on whatever points are currently "in" the cloud
-(``context.global_mask`` if set, otherwise all points). They update
-``context.global_mask`` / ``context.prev_mask`` and refresh ``context.bins``
-the same way :class:`Processor` does.
-"""
 from __future__ import annotations
 
 from collections import deque
@@ -67,6 +53,20 @@ def _fit_grad(points, distance_threshold, max_gradient, max_iterations=5):
 # --------------------------------------------------------------------------- #
 
 class GroundSegmentStage(Stage):
+    """Ground segmentation as a pipeline stage.
+
+    Three algorithms are supported via the ``method`` parameter:
+
+    * ``'basic'``    — fit a plane in each grid square with RANSAC once.
+    * ``'grad'``     — same, but reject planes that are too steep and retry by
+                        dropping the inliers and re-fitting until a plane with
+                        gradient < ``max_gradient`` is found or RANSAC gives up.
+
+    All three operate on whatever points are currently "in" the cloud
+    (``context.global_mask`` if set, otherwise all points). They update
+    ``context.global_mask`` / ``context.prev_mask`` and refresh ``context.bins``
+    the same way :class:`Processor` does.
+    """
     def __init__(
         self,
         square_size: float = 5.0,
