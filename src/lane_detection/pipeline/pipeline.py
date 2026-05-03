@@ -30,7 +30,10 @@ class Context:
         # geometry
         self.trace = None
         self.bins = None
+        self.hulls = []
+        self.ground_bins = None
 
         # masks
         self.global_mask = None
         self.prev_mask = None
+        self.ground_mask = None

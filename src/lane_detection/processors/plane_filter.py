@@ -20,7 +20,6 @@ class PlaneFilterStage(Processor):
         self.quantile_hi = quantile_hi
 
     def process_window(self, indices: np.ndarray, context) -> np.ndarray:
-        self.logger
         if indices.size < 3:
             return np.ones(indices.size, dtype=bool)
         las = context.las
@@ -43,5 +42,4 @@ class PlaneFilterStage(Processor):
         dists = np.abs(a * xs + b * ys + c - zs) / np.sqrt(a**2 + b**2 + 1)
         threshold = context.window_size * context.bin_length / 25.0
         keep = dists <= threshold
-        self.logger.info(f"Plane filter: kept {keep.sum()}/{len(las.points)} points (thresh={threshold:.3f})")
         return keep

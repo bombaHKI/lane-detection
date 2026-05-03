@@ -4,7 +4,7 @@ import numpy as np
 import geopandas as gpd
 import shapely
 
-npz_files = glob.glob("data/output/*/*.npz")
+npz_files = glob.glob("data/output/cegl_1_run/*.npz")
 print(f"Found {len(npz_files)} trace file(s)")
 
 for npz_path in npz_files:
