@@ -26,10 +26,10 @@ class WriteCloudStage(Stage):
             in_points = laspy.create(point_format=las.header.point_format, file_version=las.header.version)
             in_points.points = las.points[context.global_mask]
             inlier_name = output_dir / f"{self.file_name}_in.laz"
-            in_points.write(inlier_name)
             if len(in_points.points) > 1:
                 in_points.intensity[0] = 1
                 in_points.intensity[1] = 255
+            in_points.write(inlier_name)
             logger.info(f"Written to: {inlier_name}")
 
             out_mask = ~context.global_mask

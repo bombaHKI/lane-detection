@@ -6,6 +6,7 @@ from collections import deque
 
 import shapely
 from shapely import contains_xy
+from shapely.ops import linemerge
 
 from lane_detection.processors.base import Processor
 from lane_detection.utils.grid import build_grid
@@ -88,7 +89,18 @@ class RoadSurfaceFilter(Processor):
         square_size = self.square_size
         xy = np.stack((context.las[indices].x, context.las[indices].y),axis=1)
         hull_polygon = shapely.Polygon(xy[ConvexHull(xy).vertices])
-        trace = shapely.LineString([loc[:2] for loc,t in context.trace]).intersection(hull_polygon)
+        gps_time = np.asarray(context.las.gps_time, dtype=np.float64)
+        min_time = gps_time[indices].min()
+        max_time = gps_time[indices].max()
+        trace_raw = shapely.LineString([loc[:2] for loc, t in context.trace if min_time <= t <= max_time]).intersection(hull_polygon)
+        if trace_raw.geom_type == 'MultiLineString':
+            trace = linemerge(trace_raw)
+            if trace.geom_type == 'MultiLineString':
+                trace = max(trace.geoms, key=lambda g: g.length)
+        else:
+            trace = trace_raw
+        if len(trace.coords) <= 1:
+            return np.zeros(len(indices), dtype=bool)
         S, E = trace.coords[0], trace.coords[-1]
         M, M_inv = self.scale_along_trace_mtx(S,E,self.scale_along_trace)
 
