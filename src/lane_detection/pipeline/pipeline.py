@@ -1,5 +1,7 @@
 from lane_detection.utils.logger import create_logger
 
+import shapely
+
 class Pipeline:
     def __init__(self, stages):
         self.stages = stages
@@ -30,7 +32,7 @@ class Context:
         # geometry
         self.trace = None
         self.bins = None
-        self.hulls = []
+        self.road_surfaces: shapely.Polygon = []
         self.ground_bins = None
 
         # masks

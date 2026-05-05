@@ -8,6 +8,7 @@ import shapely
 from shapely import contains_xy
 from shapely.ops import linemerge
 
+from lane_detection.pipeline.pipeline import Context
 from lane_detection.processors.base import Processor
 from lane_detection.utils.grid import build_grid
 
@@ -27,7 +28,10 @@ class RoadSurfaceFilter(Processor):
         """
         super().__init__()
         self.square_size = square_size
+        if road_surface_buffer < 0:
+            raise ValueError("Road surface buffer should be non-negative.")
         self.road_surface_buffer = road_surface_buffer
+
         if scale_along_trace <= 0:
             raise ValueError("Scale along trace should be positive.")
         self.scale_along_trace = scale_along_trace
@@ -85,7 +89,7 @@ class RoadSurfaceFilter(Processor):
 
         return M, M_inv
 
-    def process_window(self, indices, context):
+    def process_window(self, indices, context: Context):
         square_size = self.square_size
         xy = np.stack((context.las[indices].x, context.las[indices].y),axis=1)
         hull_polygon = shapely.Polygon(xy[ConvexHull(xy).vertices])
@@ -160,7 +164,7 @@ class RoadSurfaceFilter(Processor):
             shapely_pts.extend(cell_pts @ M_inv.T)
 
         new_hull = shapely.MultiPoint(shapely_pts).convex_hull.buffer(self.road_surface_buffer)
-        context.hulls.append(new_hull)
+        context.road_surfaces.append(new_hull)
 
         xy = np.stack(
             (context.las[indices].x, context.las[indices].y),

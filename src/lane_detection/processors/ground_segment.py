@@ -10,19 +10,9 @@ from lane_detection.pipeline.pipeline import Stage
 from lane_detection.utils.grid import build_grid
 from lane_detection.utils.plane_fitting import fit_plane_ransac
 
-# --------------------------------------------------------------------------- #
-# Plane helpers
-# --------------------------------------------------------------------------- #
-
-
 def _plane_gradient(a: float, b: float) -> float:
     """Slope of the plane z = a*x + b*y + c (|grad z|)."""
     return float(np.hypot(a, b))
-
-
-# --------------------------------------------------------------------------- #
-# Per-square fitting strategies
-# --------------------------------------------------------------------------- #
 
 def _fit_basic(points, distance_threshold):
     res = fit_plane_ransac(points, distance_threshold)
@@ -46,11 +36,6 @@ def _fit_grad(points, distance_threshold, max_gradient, max_iterations=5):
         # Too steep — drop inliers and retry with the rest
         remaining = remaining[~inliers]
     return None
-
-
-# --------------------------------------------------------------------------- #
-# Stage
-# --------------------------------------------------------------------------- #
 
 class GroundSegmentStage(Stage):
     """Ground segmentation as a pipeline stage.
@@ -84,7 +69,6 @@ class GroundSegmentStage(Stage):
         self.fit_threshold = float(fit_threshold)
         self.max_gradient = float(max_gradient)
 
-    # --------------------------------------------------------------------- #
     def run(self, context):
         self.logger.info(f"Ground segmentation: method={self.method}, square_size={self.square_size}")
         xyz = context.las.xyz
@@ -118,7 +102,6 @@ class GroundSegmentStage(Stage):
             context.bins = [indices[global_mask[indices]] for indices in context.bins]
             context.ground_bins = [b.copy() for b in context.bins]
 
-    # --------------------------------------------------------------------- #
     def _run_independent(self, active_pts, grid):
         """Methods 'basic' and 'grad': each cell is processed independently."""
         fit = _fit_basic if self.method == 'basic' else _fit_grad

@@ -2,12 +2,13 @@ import numpy as np
 
 from lane_detection.pipeline.pipeline import Stage
 from lane_detection.utils.logger import create_logger
+from lane_detection.pipeline.pipeline import Context
 
 class Processor(Stage):
     def __init__(self):
         super().__init__()
 
-    def process_window(self, indices: np.ndarray, context) -> np.ndarray:
+    def process_window(self, indices: np.ndarray, context: Context) -> np.ndarray:
         """Process one window.  Return a boolean mask over *indices* of points
         to keep (True = keep)."""
         raise NotImplementedError
