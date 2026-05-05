@@ -149,7 +149,7 @@ def _window_median_v2(
 ) -> List[Tuple[np.ndarray, float]]:
     """
     Improvement to `wondow_median`: detect ground at 1st esimation, 
-    then consider points below a treshold
+    then consider points below a threshold
     """
 
     def estimated_pos(

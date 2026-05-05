@@ -18,7 +18,7 @@ Current process:
 2. Drop points far from trace
 3. statistical outlier removal (based on neighbour distance)
 4. segment ground (on 5x5 squares, based on slope)
-5. max entropy tresholding on intensity value -> markings
+5. max entropy thresholding on intensity value -> markings
 6. Do something with noisy marking points 
 
 Further details and progress will be documented as the project evolves.

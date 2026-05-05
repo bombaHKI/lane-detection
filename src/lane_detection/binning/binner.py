@@ -1,6 +1,6 @@
 import numpy as np
 
-from lane_detection.pipeline.pipeline import Stage
+from lane_detection.pipeline.pipeline import Stage, Context
 from lane_detection.utils.logger import create_logger
 
 logger = create_logger('Binning Stage')
@@ -13,17 +13,27 @@ class BinningStage(Stage):
     At each virtual point a 2D perpendicular line is implicitly defined via the local tangent.
     Bin ``i`` is the strip between perpendicular ``i`` and ``i + 1``. A LAS point belongs to
     bin ``i`` iff:
-        * its gps_time is within ``[t_i - time_treshold, t_{i+1} + time_treshold]``
+        * its gps_time is within ``[t_i - time_threshold, t_{i+1} + time_threshold]``
         * its (x, y) lies between the two perpendiculars
           (``(p - P_i) . t_i >= 0`` and ``(p - P_{i+1}) . t_{i+1} < 0``).
 
     ``context.bins`` is set to ``list[np.ndarray]`` of int64 indices into the LAS arrays.
     """
 
-    def __init__(self, time_treshold: float = 10.0):
-        self.time_treshold = float(time_treshold)
+    def __init__(self, time_threshold: float = 10.0, is_ground_processed: bool = False):
+        """
+        :param time_threshold: Each bin has a time interval (when the car was in that area).
+        Points outside this interval + time_threshold padding will not be considered in the bin.
 
-    def run(self, context):
+        :param is_ground_processed: If yes, `context.ground_bins` is assigned as well.
+        Useful when the ground points are read into the pipeline, so binning can assign `ground_bins` as well.
+        """
+        if time_threshold < 0:
+            raise ValueError("time_threshold should be non-negative.")
+        self.time_threshold = float(time_threshold)
+        self.is_ground_processed = is_ground_processed
+
+    def run(self, context: Context):
         trace = context.trace
         las = context.las
 
@@ -80,7 +90,7 @@ class BinningStage(Stage):
         gps_sorted = gps[order]
 
         # --- Assign points to bins -------------------------------------------------------
-        th = self.time_treshold
+        th = self.time_threshold
         bins: list[np.ndarray] = []
         log_interval = max(1, n_bins // 10)
         for i in range(n_bins):
@@ -113,3 +123,9 @@ class BinningStage(Stage):
             f"(avg {total_assigned / max(n_bins, 1):.0f} per bin).")
 
         context.bins = bins
+        if self.is_ground_processed:
+            context.ground_bins = [b.copy() for b in context.bins]
+            context.ground_mask = np.zeros(len(context.las.x), dtype=bool)
+            for bin in bins:
+                context.ground_mask[bin] = True
+
