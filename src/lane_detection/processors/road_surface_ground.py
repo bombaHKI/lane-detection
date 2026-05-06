@@ -32,7 +32,7 @@ class RoadSurfaceGround(Stage):
         ws = context.window_size
         shift = context.window_shift
         num_windows = len(context.road_surfaces)
-        for bin_idx, indices in enumerate(context.bins):
+        for bin_idx, indices in enumerate(context.ground_bins):
             points = context.las[indices]
             mask = np.zeros(len(indices), dtype=bool)
 
@@ -51,5 +51,6 @@ class RoadSurfaceGround(Stage):
             bins.append(keep_indices)
             global_mask[keep_indices] = True
 
+        context.bins = bins
         context.prev_mask = context.ground_mask
         context.global_mask = global_mask

@@ -1,6 +1,6 @@
 import laspy
 
-from lane_detection.pipeline.pipeline import Stage
+from lane_detection.pipeline.pipeline import Stage, Context
 from lane_detection.utils.logger import create_logger
 
 logger = create_logger('Writing Stage')
@@ -10,7 +10,7 @@ class WriteCloudStage(Stage):
         self.file_name = file_name
         self.all = all
 
-    def run(self, context):
+    def run(self, context: Context):
         logger.info("Writing to files")
         output_dir = context.output_dir
         las = context.las

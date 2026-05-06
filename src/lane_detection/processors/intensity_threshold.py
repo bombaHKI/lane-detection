@@ -1,46 +1,59 @@
-"""Per-window intensity thresholding using Kapur's maximum entropy method.
-
-For each window (built by :class:`Processor` from bins + window params),
-Kapur's max-entropy threshold is computed from the intensity histogram and
-points with intensity above ``theta_max - offset`` (clamped to ``min_threshold``)
-are kept.
-"""
 from __future__ import annotations
 
 import numpy as np
 
 from lane_detection.processors.base import Processor
-from lane_detection.utils.logger import create_logger
 from lane_detection.utils.thresholding import kapur_threshold
 
 class IntensityThresholdStage(Processor):
-    """Keep points whose intensity exceeds the per-window Kapur threshold.
+    """Keep points whose intensity exceeds the per-window threshold.
 
     Parameters
     ----------
-    offset : float, default 20.0
+    method : str, either `kapur` or `percentile`
+    offset : float
         Subtracted from each window's threshold (so more points are kept).
-    min_threshold : float, default 20.0
+    min_threshold : float
         Lower clamp for the threshold after applying ``offset``.
+    percentile : float
+        Top percentile of points to keep (e.g. 5.0 → top 5%)
     """
 
     def __init__(
         self,
-        offset: float = 20.0,
-        min_threshold: float = 20.0,
+        method: str = "kapur",
+        offset: float = 0.0,
+        min_threshold: float = 0.0,
+        percentile: float = 5.0,
     ):
-        
         super().__init__()
+        self.method = method
         self.offset = float(offset)
         self.min_threshold = float(min_threshold)
+        self.percentile = float(percentile)
 
     def process_window(self, indices: np.ndarray, context) -> np.ndarray:
         intensities = np.asarray(context.las.intensity)
         window_int = intensities[indices]
 
-        theta = kapur_threshold(window_int)
-        if theta is None:
-            return np.ones(indices.size, dtype=bool)
+        if window_int.size == 0:
+            return np.zeros(0, dtype=bool)
 
-        threshold = max(theta - self.offset, self.min_threshold)
-        return window_int > threshold
+        if self.method == "kapur":
+            theta = kapur_threshold(window_int)
+
+            if theta is None:
+                return np.ones(indices.size, dtype=bool)
+
+            threshold = max(theta - self.offset, self.min_threshold)
+            return window_int >= threshold
+
+        elif self.method == "percentile":
+            perc_value = 100.0 - self.percentile
+            theta = np.percentile(window_int, perc_value)
+
+            threshold = max(theta, self.min_threshold)
+            return window_int >= threshold
+
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
