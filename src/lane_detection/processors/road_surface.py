@@ -20,24 +20,29 @@ class RoadSurfaceFilter(Processor):
     With region growing from the car trace, selects the cells that are part of the road surface, then applies a buffer to them.
     """
 
-    def __init__(self, square_size: float = 0.5, scale_along_trace: float = 0.5, road_surface_buffer: float = 0.2):
+    def __init__(self, rect_width: float = 0.5, rect_len: float = 0.5, road_surface_buffer: float = 0.2, distance_clip: float = 0):
         """
         :param square_size: the size of squares to run the region growing with (in the transformed space)
         :parem scale_along_trace: the window size is scaled along the trace by this amount
         :param road_surface_buffer: once the road surface cells are determined, a buffer is added.
+        :param distance_clip: road surface will be clipped by this distance from car trace. In case of 0, no clip is applied.
         """
         super().__init__()
-        self.square_size = square_size
+        self.rect_width = rect_width
         if road_surface_buffer < 0:
             raise ValueError("Road surface buffer should be non-negative.")
         self.road_surface_buffer = road_surface_buffer
 
-        if scale_along_trace <= 0:
+        if rect_len <= 0:
             raise ValueError("Scale along trace should be positive.")
-        self.scale_along_trace = scale_along_trace
+        self.rect_len = rect_len
+
+        if distance_clip < 0:
+            raise ValueError("Distance clip should be non-negative.")
+        self.distance_clip = distance_clip
 
     def _point_to_grid(self, x, y):
-        return int(np.floor(x / self.square_size)), int(np.floor(y / self.square_size))
+        return int(np.floor(x / self.rect_width)), int(np.floor(y / self.rect_width))
     
     def _neighbors(self, cell):
         x, y = cell
@@ -77,7 +82,7 @@ class RoadSurfaceFilter(Processor):
         ])
 
         # forward transform
-        M = R @ S_mat @ R.T
+        M = S_mat @ R.T
 
         # inverse scaling
         S_inv = np.array([
@@ -85,12 +90,11 @@ class RoadSurfaceFilter(Processor):
             [0, 1]
         ])
 
-        M_inv = R @ S_inv @ R.T
-
+        M_inv = R @ S_inv
         return M, M_inv
 
     def process_window(self, indices, context: Context):
-        square_size = self.square_size
+        rect_width = self.rect_width
         xy = np.stack((context.las[indices].x, context.las[indices].y),axis=1)
         hull_polygon = shapely.Polygon(xy[ConvexHull(xy).vertices])
         gps_time = np.asarray(context.las.gps_time, dtype=np.float64)
@@ -106,9 +110,10 @@ class RoadSurfaceFilter(Processor):
         if len(trace.coords) <= 1:
             return np.zeros(len(indices), dtype=bool)
         S, E = trace.coords[0], trace.coords[-1]
-        M, M_inv = self.scale_along_trace_mtx(S,E,self.scale_along_trace)
+        M, M_inv = self.scale_along_trace_mtx(S,E, self.rect_width/self.rect_len)
 
-        hull_polygon = hull_polygon.buffer(-square_size)
+        if self.distance_clip > 0:
+            hull_polygon = shapely.intersection(hull_polygon, trace.buffer(self.distance_clip+2*rect_width))
         hull_coords = np.array(hull_polygon.exterior.coords)
         transformed_coords = hull_coords @ M.T
         hull_polygon_transformed = shapely.Polygon(transformed_coords)
@@ -117,7 +122,7 @@ class RoadSurfaceFilter(Processor):
         
         trace_cells_transformed = set()
         if not trace.is_empty:
-            for d in np.arange(0, trace.length, square_size/2):
+            for d in np.arange(0, trace.length, rect_width/2):
                 p = trace.interpolate(d)
                 p_vec = np.array([p.x, p.y])
                 p_transformed = p_vec @ M.T
@@ -125,7 +130,7 @@ class RoadSurfaceFilter(Processor):
                     self._point_to_grid(p_transformed[0], p_transformed[1])
                 )
 
-        grid = build_grid(xy_transformed, square_size=self.square_size)
+        grid = build_grid(xy_transformed, square_size=self.rect_width)
 
         queue = deque(trace_cells_transformed)
         visited = set()
@@ -138,8 +143,8 @@ class RoadSurfaceFilter(Processor):
             if cell in grid:
                 continue
 
-            wx = (cell[0]+0.5) * square_size
-            wy = (cell[1]+0.5) * square_size
+            wx = (cell[0]+0.5) * rect_width
+            wy = (cell[1]+0.5) * rect_width
             if not hull_polygon_transformed.contains(shapely.Point(wx, wy)):
                 continue
             
@@ -149,19 +154,19 @@ class RoadSurfaceFilter(Processor):
                 if nb not in grid and nb not in visited:
                     queue.append(nb)
 
-        shapely_pts = []
+        shapely_pts = set()
         for cell in visited:
-            wx = cell[0] * square_size
-            wy = cell[1] * square_size
+            wx = cell[0] * rect_width
+            wy = cell[1] * rect_width
 
             cell_pts = np.array([
                 (wx, wy),
-                (wx + square_size, wy),
-                (wx + square_size, wy + square_size),
-                (wx, wy + square_size),
+                (wx + rect_width, wy),
+                (wx + rect_width, wy + rect_width),
+                (wx, wy + rect_width),
             ])
 
-            shapely_pts.extend(cell_pts @ M_inv.T)
+            shapely_pts.update([tuple(p) for p in cell_pts @ M_inv.T])
 
         new_hull = shapely.MultiPoint(shapely_pts).convex_hull.buffer(self.road_surface_buffer)
         context.road_surfaces.append(new_hull)

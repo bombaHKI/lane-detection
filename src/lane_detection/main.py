@@ -25,16 +25,15 @@ def load_config(config_file_path):
         # 'point_path': 'data/LiDaR/871e1d886ffffff_cegl_m4_2.laz',
         # 'point_path': 'data/LiDaR/871f1640dffffff_ger_border.laz',
         # 'point_path': 'data/output/ger_border_run/3_ground_in.laz',
-        'point_path': 'data/output/LiDaR/ground/ground_in.laz',
-        # 'point_path': 'data/output/LiDaR/threshold/intensity_in.laz',
+        'point_path': 'data/output/cegl_2/3_intensity_in.laz',
         'bin_length': 20,
         'binning_time_threshold': 10,
         'window_size': 2,
         'window_shift': 1,
-        'distance_filter': 12,
-        'road_surface_square_size': 0.5,
-        'road_surface_scale_along_trace': 0.3,
-        'road_surface_buffer': 0.3,
+        'distance_clip': 12,
+        'road_surface_rectangle_width': 0.5,
+        'road_surface_rectangle_length': 2.5,
+        'road_surface_buffer': 0.5,
     }
 
 def read_point_cloud(lidar_path):
@@ -45,29 +44,26 @@ def read_point_cloud(lidar_path):
 def build_pipeline(config):
     return Pipeline([
         SetupOutputStage(),
-        CarTraceStage('window_median_v2', 'data/output/car_trace/npz/trace_window_median_v2.npz'),
+        CarTraceStage('window_median_v2', 'data/output/cegl_2/car_trace/npz/trace_window_median_v2.npz'),
         BinningStage(
             time_threshold=config['binning_time_threshold'],
             is_ground_processed=True
         ),
-        # TraceDistanceFilterStage(config['distance_filter']),
+        # TraceDistanceFilterStage(distance=config['distance_clip']),
         # WriteCloudStage('1_distance'),
         # PlaneFilterStage(),
         # WriteCloudStage('2_plane_prefilter'),
         # GroundSegmentStage(square_size=2, method='grad', distance_threshold=0.05),
         # WriteCloudStage('3_ground'),
-        IntensityThresholdStage(method='percentile', percentile=5),
-        WriteCloudStage('4_intensity'),
+        # IntensityThresholdStage(method='percentile', percentile=5),
+        # WriteCloudStage('4_intensity'),
         RoadSurfaceFilter(
-            square_size=config['road_surface_square_size'],
-            scale_along_trace=config['road_surface_scale_along_trace'],
-            road_surface_buffer=config['road_surface_buffer']
+            rect_width=config['road_surface_rectangle_width'],
+            rect_len=config['road_surface_rectangle_length'],
+            road_surface_buffer=config['road_surface_buffer'],
+            distance_clip=config["distance_clip"]
         ),
         WriteCloudStage('5_road_surface_sparse'),
-        RoadSurfaceGround(),
-        WriteCloudStage('6_road_surface_ground'),
-        IntensityThresholdStage(method='kapur'),
-        WriteCloudStage('7_road_surface_intensity'),
     ])
 
 
