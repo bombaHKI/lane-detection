@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import shapely
 from shapely.ops import linemerge
+from sklearn.cluster import DBSCAN
 from sklearn.linear_model import RANSACRegressor, LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
@@ -11,81 +12,92 @@ from lane_detection.pipeline.pipeline import Stage, Context
 
 
 class FitLinesStage(Stage):
-    """
-    Fits quadratic lane-lines per window.
+    """Incremental lane-line tracker using DBSCAN clustering and cubic RANSAC.
 
-    For each window the points are rotated so that the car trajectory is aligned
-    with the x-axis.  The stage then iteratively:
-      1. Fits a quadratic curve (y = ax² + bx + c) with RANSAC to the remaining
-         transformed (x, y) points.
-      2. Accepts the fit when ALL conditions hold:
-           - inlier count  >= min_inliers
-           - x-span of inliers >= min_span
-           - |a|  <= max_curvature   (curvature limit)
-      3. Removes inliers from the pool and adds the sampled curve to the window
-         line list.
-      4. Stops when n_lines have been collected, or when too few points remain,
-         or when the latest fit is rejected.
+    context.lines is initialised to [] at the start of run() and holds one
+    shapely.LineString per tracked lane divider in world coordinates.
 
-    Fitted curves are transformed back to original (x, y) coordinates and
-    appended to context.lines as shapely.LineString objects.
+    Per-window algorithm
+    --------------------
+    1.  Rotate points so the local car trajectory is the x-axis.
+    2.  Compute the trajectory curvature in the rotated frame (quadratic fit →
+        second derivative = 2·a₂).  Accepted fits must satisfy
+        |κ_fit − κ_traj| ≤ curvature_limit.
+    3.  Scale the along-trace (x) coordinate by *x_scale*, then run DBSCAN.
+    4.  Loop:
+        a.  Find the (cluster, existing_line) pair with the smallest mean
+            distance (similarity).
+        b.  If best_distance ≤ similarity_threshold:
+              - Fit cubic RANSAC on the cluster.
+              - Accept if span and curvature conditions hold.
+              - Merge the fitted segment into the matching existing line.
+              - Remove the cluster and repeat.
+        c.  Else (no cluster is close enough to any existing line):
+              - Bootstrap: fit and add remaining clusters as new lines.
+              - Stop the loop.
+
+    Parameters
+    ----------
+    eps : float
+        DBSCAN neighbourhood radius in scaled space.
+    min_samples : int
+        DBSCAN minimum points per cluster.
+    x_scale : float
+        Compression applied to the along-trace axis before DBSCAN.
+    min_cluster_points : int
+        Minimum inliers for a cubic fit to be accepted.
+    min_span : float
+        Minimum along-trace span (metres) of inliers for a fit to be accepted.
+    residual_threshold : float
+        RANSAC inlier threshold for the cubic fit (metres, perpendicular).
+    max_trials : int
+        RANSAC maximum iterations.
+    similarity_threshold : float
+        Mean distance (metres, in rotated space) below which a cluster is
+        considered to belong to an existing line.
+    curvature_limit : float
+        Maximum allowed deviation of the fit's curvature from the trajectory's.
+    sample_points : int
+        Number of points sampled per fitted segment when building LineStrings.
     """
 
     def __init__(
         self,
-        n_lines: int = 4,
-        max_curvature: float = 0.01,
-        min_span: float = 10.0,
-        residual_threshold: float = 0.3,
-        min_inliers: int = 10,
-        max_trials: int = 130,
+        eps: float = 0.3,
+        min_samples: int = 5,
+        x_scale: float = 0.2,
+        min_cluster_points: int = 10,
+        min_span: float = 5.0,
+        residual_threshold: float = 0.15,
+        max_trials: int = 200,
+        similarity_threshold: float = 0.5,
+        curvature_limit: float = 0.05,
         sample_points: int = 100,
     ):
-        """
-        Parameters
-        ----------
-        n_lines : int
-            Maximum number of lines to fit per window.
-        max_curvature : float
-            Maximum allowed absolute value of the quadratic coefficient (|a|).
-        min_span : float
-            Minimum required x-span (in trace-aligned units) of the inliers.
-        residual_threshold : float
-            RANSAC residual threshold.
-        min_inliers : int
-            Minimum inlier count to accept a fit and to continue iterating.
-        max_trials : int
-            Maximum RANSAC trials per fit.
-        sample_points : int
-            Number of points sampled along the fitted curve for the LineString.
-        """
         super().__init__()
-        self.n_lines = n_lines
-        self.max_curvature = max_curvature
+        self.eps = eps
+        self.min_samples = min_samples
+        self.x_scale = x_scale
+        self.min_cluster_points = min_cluster_points
         self.min_span = min_span
         self.residual_threshold = residual_threshold
-        self.min_inliers = min_inliers
         self.max_trials = max_trials
+        self.similarity_threshold = similarity_threshold
+        self.curvature_limit = curvature_limit
         self.sample_points = sample_points
 
     # ------------------------------------------------------------------
-    # Coordinate transform helpers
+    # Transform helpers
+    # Forward  : pts_rot = (pts_xy − origin) @ R.T
+    # Inverse  : pts_xy  = pts_rot @ R + origin
     # ------------------------------------------------------------------
 
     def _get_transform(self, window_indices: np.ndarray, context: Context):
-        """Build a 2-D rotation that aligns the local car trace with the x-axis.
+        """Return (R, origin, trace_geom) or None.
 
-        Returns
-        -------
-        (R, origin) or None
-            R      : (2, 2) orthogonal matrix whose rows are the new basis vectors
-                     [u_along_trace, u_perpendicular].
-            origin : (2,) translation (first trace point clipped to window hull).
-
-        Transform conventions
-        ---------------------
-        Forward  : pts_t   = (pts_xy - origin) @ R.T
-        Inverse  : pts_xy  = pts_t  @ R  + origin
+        R      : (2,2) rotation matrix whose rows are [u_along, u_perp].
+        origin : (2,) world-space anchor (first point of the clipped trace).
+        trace_geom : shapely.LineString of the local trace segment.
         """
         las = context.las
         xy = np.column_stack([
@@ -95,7 +107,6 @@ class FitLinesStage(Stage):
         if len(xy) < 2:
             return None
 
-        # Build convex hull for trace clipping; buffer handles collinear cases
         hull = shapely.MultiPoint(xy).convex_hull.buffer(1.0)
 
         gps_time = np.asarray(las.gps_time, dtype=np.float64)
@@ -110,17 +121,17 @@ class FitLinesStage(Stage):
         if trace_raw.is_empty:
             return None
         if trace_raw.geom_type == "MultiLineString":
-            trace = linemerge(trace_raw)
-            if trace.geom_type == "MultiLineString":
-                trace = max(trace.geoms, key=lambda g: g.length)
+            trace_geom = linemerge(trace_raw)
+            if trace_geom.geom_type == "MultiLineString":
+                trace_geom = max(trace_geom.geoms, key=lambda g: g.length)
         else:
-            trace = trace_raw
+            trace_geom = trace_raw
 
-        if trace.is_empty or len(trace.coords) < 2:
+        if trace_geom.is_empty or len(trace_geom.coords) < 2:
             return None
 
-        S = np.array(trace.coords[0], dtype=np.float64)
-        E = np.array(trace.coords[-1], dtype=np.float64)
+        S = np.array(trace_geom.coords[0], dtype=np.float64)
+        E = np.array(trace_geom.coords[-1], dtype=np.float64)
         v = E - S
         norm = np.linalg.norm(v)
         if norm < 1e-9:
@@ -128,30 +139,48 @@ class FitLinesStage(Stage):
 
         u = v / norm
         u_perp = np.array([-u[1], u[0]])
-        R = np.stack([u, u_perp], axis=0)  # rows are basis vectors → orthogonal
-        return R, S
+        R = np.stack([u, u_perp], axis=0)  # (2,2)
+        return R, S, trace_geom
 
     # ------------------------------------------------------------------
-    # RANSAC quadratic fit
+    # Trajectory curvature
     # ------------------------------------------------------------------
 
-    def _fit_one(self, x: np.ndarray, y: np.ndarray):
-        """Fit y = ax² + bx + c with RANSAC.
-
-        Returns
-        -------
-        (fitted_pipeline, inlier_mask) or None
-        """
-        if len(x) < self.min_inliers:
+    def _trajectory_curvature(
+        self,
+        trace_geom: shapely.LineString,
+        R: np.ndarray,
+        origin: np.ndarray,
+    ) -> float | None:
+        """Fit y = a·x² + b·x + c to the trace in rotated space; return 2·a."""
+        coords = np.array(trace_geom.coords, dtype=np.float64)[:, :2]
+        if len(coords) < 3:
+            return None
+        rot = (coords - origin) @ R.T  # (M,2)
+        try:
+            coeffs = np.polyfit(rot[:, 0], rot[:, 1], 2)  # [a, b, c]
+            return float(2.0 * coeffs[0])  # second derivative = 2a
+        except Exception:
             return None
 
+    # ------------------------------------------------------------------
+    # Cubic RANSAC
+    # ------------------------------------------------------------------
+
+    def _fit_cubic(self, x: np.ndarray, y: np.ndarray):
+        """Fit y = a₃x³ + a₂x² + a₁x + a₀ with RANSAC.
+
+        Returns (fitted_pipeline, inlier_mask) or None.
+        """
+        if len(x) < self.min_cluster_points:
+            return None
         estimator = make_pipeline(
-            PolynomialFeatures(degree=2, include_bias=False),
+            PolynomialFeatures(degree=3, include_bias=False),
             LinearRegression(),
         )
         ransac = RANSACRegressor(
             estimator=estimator,
-            min_samples=3,
+            min_samples=max(4, self.min_cluster_points // 2),
             residual_threshold=self.residual_threshold,
             max_trials=self.max_trials,
         )
@@ -159,79 +188,240 @@ class FitLinesStage(Stage):
             ransac.fit(x.reshape(-1, 1), y)
         except Exception:
             return None
-
         return ransac.estimator_, ransac.inlier_mask_
 
+    def _curvature_at_midpoint(self, model, x_min: float, x_max: float) -> float:
+        """Second derivative of the cubic at the x midpoint: 6·a₃·x_mid + 2·a₂."""
+        x_mid = (x_min + x_max) / 2.0
+        coef = model.named_steps["linearregression"].coef_  # [a₁, a₂, a₃]
+        a2 = float(coef[1])
+        a3 = float(coef[2])
+        return 6.0 * a3 * x_mid + 2.0 * a2
+
     # ------------------------------------------------------------------
-    # Per-window processing
+    # Cluster ↔ line similarity
     # ------------------------------------------------------------------
 
-    def _process_window(
-        self, window_indices: np.ndarray, context: Context
-    ) -> list[shapely.LineString]:
+    def _cluster_line_similarity(
+        self,
+        cluster_rot: np.ndarray,       # (N,2) in rotated space
+        line: shapely.LineString,
+        R: np.ndarray,
+        origin: np.ndarray,
+    ) -> float:
+        """Mean distance from cluster points to *line* in the rotated frame.
+
+        Returns inf when there is no overlap in the along-trace (x) direction.
+        """
+        line_coords = np.array(line.coords, dtype=np.float64)[:, :2]
+        line_rot = (line_coords - origin) @ R.T  # (M,2)
+
+        # Require x-range overlap
+        overlap_lo = max(line_rot[:, 0].min(), cluster_rot[:, 0].min())
+        overlap_hi = min(line_rot[:, 0].max(), cluster_rot[:, 0].max())
+        if overlap_lo >= overlap_hi:
+            return float("inf")
+
+        # Consider only cluster points inside the overlap x-range
+        in_overlap = (
+            (cluster_rot[:, 0] >= overlap_lo) & (cluster_rot[:, 0] <= overlap_hi)
+        )
+        if not in_overlap.any():
+            return float("inf")
+
+        line_rot_geom = shapely.LineString(line_rot[:, :2])
+        pts = shapely.points(cluster_rot[in_overlap, 0], cluster_rot[in_overlap, 1])
+        dists = shapely.distance(pts, line_rot_geom)  # vectorised
+        return float(dists.mean())
+
+    # ------------------------------------------------------------------
+    # Build / merge line segments
+    # ------------------------------------------------------------------
+
+    def _sample_line(
+        self,
+        model,
+        x_min: float,
+        x_max: float,
+        R: np.ndarray,
+        origin: np.ndarray,
+    ) -> shapely.LineString:
+        """Sample the cubic model over [x_min, x_max] and return in world coords."""
+        x_s = np.linspace(x_min, x_max, self.sample_points)
+        y_s = model.predict(x_s.reshape(-1, 1))
+        pts_world = np.column_stack([x_s, y_s]) @ R + origin
+        return shapely.LineString(pts_world)
+
+    def _merge_line(
+        self,
+        existing: shapely.LineString,
+        model,
+        x_min: float,
+        x_max: float,
+        R: np.ndarray,
+        origin: np.ndarray,
+    ) -> shapely.LineString:
+        """Merge existing line with a new fitted segment.
+
+        The portion of the existing line within [x_min, x_max] (in rotated
+        space) is replaced by the new fit; portions outside are kept, giving
+        the union x-range.
+        """
+        old_coords = np.array(existing.coords, dtype=np.float64)[:, :2]
+        old_rot = (old_coords - origin) @ R.T  # transform into current window frame
+
+        # Keep only existing points that lie outside the new segment's x-range
+        outside = (old_rot[:, 0] < x_min) | (old_rot[:, 0] > x_max)
+        kept_rot = old_rot[outside]  # (K,2)
+
+        # Sample the new fit
+        x_s = np.linspace(x_min, x_max, self.sample_points)
+        y_s = model.predict(x_s.reshape(-1, 1))
+        new_rot = np.column_stack([x_s, y_s])  # (S,2)
+
+        combined_rot = (
+            np.vstack([kept_rot[:, :2], new_rot]) if len(kept_rot) else new_rot
+        )
+        order = np.argsort(combined_rot[:, 0], kind="stable")
+        sorted_rot = combined_rot[order]
+
+        pts_world = sorted_rot @ R + origin
+        if len(pts_world) < 2:
+            return existing
+        return shapely.LineString(pts_world)
+
+    # ------------------------------------------------------------------
+    # Per-window logic
+    # ------------------------------------------------------------------
+
+    def _process_window(self, window_indices: np.ndarray, context: Context):
         result = self._get_transform(window_indices, context)
         if result is None:
-            return []
-        R, origin = result
+            return
+        R, origin, trace_geom = result
 
         las = context.las
         xy = np.column_stack([
             np.asarray(las.x, dtype=np.float64)[window_indices],
             np.asarray(las.y, dtype=np.float64)[window_indices],
         ])
-        # Forward transform: rotate so trace = x-axis
-        xy_t = (xy - origin) @ R.T  # (N, 2)  col0=along-trace, col1=perp
+        xy_rot = (xy - origin) @ R.T  # (N,2) — col0 = along-trace, col1 = perp
 
-        remaining = np.ones(len(window_indices), dtype=bool)
-        window_lines: list[shapely.LineString] = []
+        traj_curvature = self._trajectory_curvature(trace_geom, R, origin)
 
-        while len(window_lines) < self.n_lines:
-            rem_idx = np.nonzero(remaining)[0]
-            if len(rem_idx) < self.min_inliers:
-                break
+        # Scale along trace and cluster
+        xy_scaled = xy_rot.copy()
+        xy_scaled[:, 0] *= self.x_scale
+        raw_labels = DBSCAN(
+            eps=self.eps, min_samples=self.min_samples
+        ).fit_predict(xy_scaled)
 
-            x_rem = xy_t[rem_idx, 0]
-            y_rem = xy_t[rem_idx, 1]
+        # Build cluster pool (local indices into window)
+        clusters: dict[int, np.ndarray] = {
+            label: np.where(raw_labels == label)[0]
+            for label in np.unique(raw_labels)
+            if label != -1
+            and (raw_labels == label).sum() >= self.min_cluster_points
+        }
+        if not clusters:
+            return
 
-            fit = self._fit_one(x_rem, y_rem)
-            if fit is None:
-                break
+        remaining: set[int] = set(clusters.keys())
 
-            model, inlier_local = fit
+        while remaining:
+            # ----------------------------------------------------------
+            # Find (cluster, existing_line) pair with best similarity
+            # ----------------------------------------------------------
+            best_dist = float("inf")
+            best_ck = None
+            best_li = None
 
-            # --- acceptance checks ---
-            n_inliers = int(inlier_local.sum())
-            if n_inliers < self.min_inliers:
-                break
+            for ck in remaining:
+                cluster_rot = xy_rot[clusters[ck]]
+                for li, line in enumerate(context.lines):
+                    d = self._cluster_line_similarity(cluster_rot, line, R, origin)
+                    if d < best_dist:
+                        best_dist = d
+                        best_ck = ck
+                        best_li = li
 
-            x_inliers = x_rem[inlier_local]
-            span = float(x_inliers.max() - x_inliers.min())
-            if span < self.min_span:
-                break
+            # ----------------------------------------------------------
+            # Merge branch: cluster is close to an existing line
+            # ----------------------------------------------------------
+            if context.lines and best_dist <= self.similarity_threshold:
+                cluster_idx = clusters[best_ck]
+                remaining.discard(best_ck)
 
-            # coef_ layout: [x-coef, x²-coef]  (include_bias=False, degree=2)
-            a = float(model.named_steps["linearregression"].coef_[1])
-            if abs(a) > self.max_curvature:
-                break
+                x_c = xy_rot[cluster_idx, 0]
+                y_c = xy_rot[cluster_idx, 1]
+                fit = self._fit_cubic(x_c, y_c)
+                if fit is None:
+                    continue
 
-            # --- build LineString in original coordinates ---
-            x_sample = np.linspace(x_inliers.min(), x_inliers.max(), self.sample_points)
-            y_sample = model.predict(x_sample.reshape(-1, 1))
-            pts_t = np.column_stack([x_sample, y_sample])
-            pts_orig = pts_t @ R + origin  # inverse transform
+                model, inlier_mask = fit
+                x_in = x_c[inlier_mask]
 
-            window_lines.append(shapely.LineString(pts_orig))
+                if len(x_in) < self.min_cluster_points:
+                    continue
+                if float(x_in.max() - x_in.min()) < self.min_span:
+                    continue
+                if traj_curvature is not None:
+                    fit_curv = self._curvature_at_midpoint(
+                        model, float(x_in.min()), float(x_in.max())
+                    )
+                    if abs(fit_curv - traj_curvature) > self.curvature_limit:
+                        continue
 
-            # Remove inliers before next iteration
-            remaining[rem_idx[inlier_local]] = False
+                context.lines[best_li] = self._merge_line(
+                    context.lines[best_li],
+                    model,
+                    float(x_in.min()),
+                    float(x_in.max()),
+                    R,
+                    origin,
+                )
 
-        return window_lines
+            # ----------------------------------------------------------
+            # Bootstrap branch: no existing line matches → create new ones
+            # ----------------------------------------------------------
+            else:
+                for ck in list(remaining):
+                    cluster_idx = clusters[ck]
+                    x_c = xy_rot[cluster_idx, 0]
+                    y_c = xy_rot[cluster_idx, 1]
+
+                    fit = self._fit_cubic(x_c, y_c)
+                    if fit is None:
+                        continue
+
+                    model, inlier_mask = fit
+                    x_in = x_c[inlier_mask]
+
+                    if len(x_in) < self.min_cluster_points:
+                        continue
+                    if float(x_in.max() - x_in.min()) < self.min_span:
+                        continue
+                    if traj_curvature is not None:
+                        fit_curv = self._curvature_at_midpoint(
+                            model, float(x_in.min()), float(x_in.max())
+                        )
+                        if abs(fit_curv - traj_curvature) > self.curvature_limit:
+                            continue
+
+                    context.lines.append(
+                        self._sample_line(
+                            model, float(x_in.min()), float(x_in.max()), R, origin
+                        )
+                    )
+                break  # stop after bootstrapping remaining clusters
 
     # ------------------------------------------------------------------
     # Stage entry point
     # ------------------------------------------------------------------
 
     def run(self, context: Context):
+        context.lines = []  # fresh start; flat list of tracked lane LineStrings
+
         bins = context.bins
         window_size = context.window_size
         window_shift = context.window_shift
@@ -244,25 +434,18 @@ class FitLinesStage(Stage):
             start += window_shift
 
         n_windows = len(windows)
-        self.logger.info(
-            f"FitLines: {n_windows} windows "
-            f"(size={window_size}, shift={window_shift}, n_lines={self.n_lines})."
-        )
-
-        if context.lines is None:
-            context.lines = []
-
-        total_lines = 0
+        self.logger.info(f"FitLinesV2: {n_windows} windows.")
         log_step = max(1, n_windows // 10)
+
         for i, window_indices in enumerate(windows):
             if i % log_step == 0 or i == n_windows - 1:
                 self.logger.info(
-                    f"Window {i + 1}/{n_windows} ({(i + 1) / n_windows * 100:.0f}%)"
+                    f"Window {i + 1}/{n_windows} — {len(context.lines)} tracked lines."
                 )
             if window_indices.size == 0:
                 continue
-            lines = self._process_window(window_indices, context)
-            context.lines.append(lines)
-            total_lines += len(lines)
+            self._process_window(window_indices, context)
 
-        self.logger.info(f"FitLines done: {total_lines} lines across {n_windows} windows.")
+        self.logger.info(
+            f"FitLinesV2 done: {len(context.lines)} lane lines total."
+        )

@@ -1,6 +1,6 @@
 {
   "input": {
-    "point_path": "data/LiDaR/871e1d8b1ffffff_cegl_m4_1.laz"
+    "point_path": "data/output/cegl_2/5_downsample.laz"
   },
   "context": {
     "window_size": 2,
@@ -20,7 +20,7 @@
       "enabled": true,
       "params": {
         "method": "window_median_v2",
-        "load_path": "data/output/cegl_1/trace_pulse_lines.npz"
+        "load_path": "data/output/cegl_2/car_trace/npz/trace_pulse_lines.npz"
       }
     },
     {
@@ -33,14 +33,14 @@
     },
     {
       "name": "trace_distance_filter",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "distance": 12.0
       }
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "1_distance",
         "all": false
@@ -56,7 +56,7 @@
     },
     {
       "name": "ground_segment",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "square_size": 2.0,
         "method": "grad",
@@ -67,7 +67,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "2_ground",
         "all": false
@@ -75,7 +75,7 @@
     },
     {
       "name": "intensity_threshold",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "method": "kapur",
         "offset": 0.0,
@@ -85,7 +85,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "3_intensity",
         "all": false
@@ -93,7 +93,7 @@
     },
     {
       "name": "road_surface",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "rect_width": 0.5,
         "rect_len": 2.5,
@@ -103,7 +103,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "4_road_surface_sparse",
         "all": false
@@ -120,14 +120,14 @@
     },
     {
       "name": "downsample",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "square_size": 0.2
       }
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "5_downsample",
         "all": true
@@ -135,7 +135,7 @@
     },
     {
       "name": "binning",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "time_threshold": 10.0,
         "is_ground_processed": false
@@ -145,12 +145,15 @@
       "name": "fit_lines",
       "enabled": true,
       "params": {
-        "n_lines": 4,
-        "max_curvature": 0.1,
-        "min_span": 10.0,
-        "residual_threshold": 0.2,
-        "min_inliers": 10,
-        "max_trials": 130,
+        "eps": 0.3,
+        "min_samples": 5,
+        "x_scale": 0.2,
+        "min_cluster_points": 10,
+        "min_span": 5.0,
+        "residual_threshold": 0.15,
+        "max_trials": 200,
+        "similarity_threshold": 0.5,
+        "curvature_limit": 0.05,
         "sample_points": 100
       }
     },

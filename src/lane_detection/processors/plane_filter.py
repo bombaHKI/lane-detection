@@ -7,10 +7,7 @@
 from __future__ import annotations
 
 import numpy as np
-import open3d as o3d
-from sklearn.linear_model import RANSACRegressor
 from lane_detection.processors.base import Processor
-from lane_detection.utils.logger import create_logger
 from lane_detection.utils.plane_fitting import fit_plane_ransac
 
 class PlaneFilterStage(Processor):

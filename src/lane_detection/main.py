@@ -15,7 +15,6 @@ from lane_detection.processors.road_surface import RoadSurfaceFilter
 from lane_detection.processors.local_sor import LocalSORStage
 from lane_detection.processors.downsample import DownsampleStage
 from lane_detection.processors.fit_lines import FitLinesStage
-from lane_detection.processors.dbscan_filter import DBSCANFilterStage
 from lane_detection.io.setup import SetupOutputStage
 from lane_detection.io.writer import WriteCloudStage, WriteLines
 
@@ -63,7 +62,6 @@ STAGE_REGISTRY = {
     "local_sor": LocalSORStage,
     "downsample": DownsampleStage,
     "fit_lines": FitLinesStage,
-    "dbscan_filter": DBSCANFilterStage,
     "write_cloud": WriteCloudStage,
     "write_lines": WriteLines,
 }

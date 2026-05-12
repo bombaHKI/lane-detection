@@ -63,9 +63,17 @@ class WriteLines(Stage):
             logger.info("No lines to write.")
             return
         try:
+            # context.lines can be:
+            #   list[list[LineString]]  — FitLinesStage (one list per window)
+            #   list[LineString]        — FitLinesV2Stage (one per tracked lane)
+            first = lines[0]
+            if isinstance(first, shapely.LineString):
+                geoms = lines  # flat list → one row per tracked lane
+            else:
+                geoms = [shapely.MultiLineString(g) for g in lines]
             gdf = gpd.GeoDataFrame(
-                {"id": range(len(lines))},
-                geometry=[shapely.MultiLineString(lines) for lines in context.lines],
+                {"id": range(len(geoms))},
+                geometry=geoms,
                 crs=self.lines_crs,
             )
             lines_path = output_dir / f"{self.file_name}.gpkg"
