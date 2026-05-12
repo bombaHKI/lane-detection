@@ -1,0 +1,166 @@
+{
+  "input": {
+    "point_path": "data/LiDaR/871e1d8b1ffffff_cegl_m4_1.laz"
+  },
+  "context": {
+    "window_size": 2,
+    "window_shift": 1,
+    "bin_length": 20
+  },
+  "stages": [
+    {
+      "name": "setup_output",
+      "enabled": true,
+      "params": {
+        "base_path": "data/output"
+      }
+    },
+    {
+      "name": "car_trace",
+      "enabled": true,
+      "params": {
+        "method": "window_median_v2",
+        "load_path": "data/output/cegl_1/trace_pulse_lines.npz"
+      }
+    },
+    {
+      "name": "binning",
+      "enabled": true,
+      "params": {
+        "time_threshold": 10.0,
+        "is_ground_processed": true
+      }
+    },
+    {
+      "name": "trace_distance_filter",
+      "enabled": true,
+      "params": {
+        "distance": 12.0
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "1_distance",
+        "all": false
+      }
+    },
+    {
+      "name": "plane_filter",
+      "enabled": false,
+      "params": {
+        "quantile_lo": 0.1,
+        "quantile_hi": 0.7
+      }
+    },
+    {
+      "name": "ground_segment",
+      "enabled": true,
+      "params": {
+        "square_size": 2.0,
+        "method": "grad",
+        "distance_threshold": 0.2,
+        "fit_threshold": 0.05,
+        "max_gradient": 0.4
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "2_ground",
+        "all": false
+      }
+    },
+    {
+      "name": "intensity_threshold",
+      "enabled": true,
+      "params": {
+        "method": "kapur",
+        "offset": 0.0,
+        "min_threshold": 0.0,
+        "percentile": 5.0
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "3_intensity",
+        "all": false
+      }
+    },
+    {
+      "name": "road_surface",
+      "enabled": true,
+      "params": {
+        "rect_width": 0.5,
+        "rect_len": 2.5,
+        "road_surface_buffer": 0.5,
+        "distance_clip": 12.0
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "4_road_surface_sparse",
+        "all": false
+      }
+    },
+    {
+      "name": "local_sor",
+      "enabled": false,
+      "params": {
+        "square_size": 1.0,
+        "k": 16,
+        "sigma": 2.0
+      }
+    },
+    {
+      "name": "downsample",
+      "enabled": true,
+      "params": {
+        "square_size": 0.2
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "5_downsample",
+        "all": true
+      }
+    },
+    {
+      "name": "binning",
+      "enabled": true,
+      "params": {
+        "time_threshold": 10.0,
+        "is_ground_processed": false
+      }
+    },
+    {
+      "name": "fit_lines",
+      "enabled": true,
+      "params": {
+        "n_lines": 4,
+        "max_curvature": 0.1,
+        "min_span": 10.0,
+        "residual_threshold": 0.2,
+        "min_inliers": 10,
+        "max_trials": 130,
+        "sample_points": 100
+      }
+    },
+    {
+      "name": "write_lines",
+      "enabled": true,
+      "params": {
+        "file_name": "lane_lines",
+        "lines_crs": "EPSG:3857"
+      }
+    }
+  ]
+}

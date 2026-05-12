@@ -1,4 +1,6 @@
 import laspy
+import geopandas as gpd
+import shapely
 
 from lane_detection.pipeline.pipeline import Stage, Context
 from lane_detection.utils.logger import create_logger
@@ -45,3 +47,30 @@ class WriteCloudStage(Stage):
             logger.info(f"Written to: {outlier_name}")
         except Exception as e:
             logger.info(f"Failed to write point clouds: {e}")
+
+class WriteLines(Stage):
+    def __init__(self, file_name, lines_crs="EPSG:3857"):
+        self.file_name = file_name
+        self.lines_crs = lines_crs
+
+    def run(self, context: Context):
+        logger.info("Writing lines to files")
+        output_dir = context.output_dir
+        las = context.las
+
+        lines = getattr(context, 'lines', [])
+        if not lines:
+            logger.info("No lines to write.")
+            return
+        try:
+            gdf = gpd.GeoDataFrame(
+                {"id": range(len(lines))},
+                geometry=[shapely.MultiLineString(lines) for lines in context.lines],
+                crs=self.lines_crs,
+            )
+            lines_path = output_dir / f"{self.file_name}.gpkg"
+            gdf.to_file(lines_path, driver="GPKG")
+            logger.info(f"Written {len(lines)} lines to: {lines_path}")
+        except Exception as e:
+            logger.info(f"Failed to write lines: {e}")
+        return

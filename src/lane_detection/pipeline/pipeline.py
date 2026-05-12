@@ -39,3 +39,6 @@ class Context:
         self.global_mask = None
         self.prev_mask = None
         self.ground_mask = None
+
+        # fitted lane lines (list of shapely.LineString)
+        self.lines = []
