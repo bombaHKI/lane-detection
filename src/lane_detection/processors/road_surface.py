@@ -11,6 +11,7 @@ from shapely.ops import linemerge
 from lane_detection.pipeline.pipeline import Context
 from lane_detection.processors.base import Processor
 from lane_detection.utils.grid import build_grid
+from lane_detection.utils.transform import scale_along_trace_mtx
 
 class RoadSurfaceFilter(Processor):
     """Road Surface Filter Stage
@@ -53,46 +54,6 @@ class RoadSurfaceFilter(Processor):
             (x, y - 1),
         ]
     
-    def scale_along_trace_mtx(self,S, E, scale: float):
-        """
-        :param S: start of the trace vector
-        :param E: end of the trace
-        :param scale: the amount distances in SE direction will be scaled by
-        Returns:
-            M      : 2x2 scaling matrix along direction SE
-            M_inv  : its inverse
-        """
-        v = np.asarray(E) - np.asarray(S)
-        norm = np.linalg.norm(v)
-        if norm == 0:
-            raise ValueError("S and E cannot be the same point")
-
-        u = v / norm  # unit direction vector
-
-        # perpendicular vector
-        u_perp = np.array([-u[1], u[0]])
-
-        # rotation matrix (basis change)
-        R = np.stack([u, u_perp], axis=1)  # columns are basis vectors
-
-        # scaling in aligned space
-        S_mat = np.array([
-            [scale, 0],
-            [0, 1]
-        ])
-
-        # forward transform
-        M = S_mat @ R.T
-
-        # inverse scaling
-        S_inv = np.array([
-            [1/scale, 0],
-            [0, 1]
-        ])
-
-        M_inv = R @ S_inv
-        return M, M_inv
-
     def process_window(self, indices, context: Context):
         rect_width = self.rect_width
         xy = np.stack((context.las[indices].x, context.las[indices].y),axis=1)
@@ -110,7 +71,7 @@ class RoadSurfaceFilter(Processor):
         if len(trace.coords) <= 1:
             return np.zeros(len(indices), dtype=bool)
         S, E = trace.coords[0], trace.coords[-1]
-        M, M_inv = self.scale_along_trace_mtx(S,E, self.rect_width/self.rect_len)
+        M, M_inv = scale_along_trace_mtx(S,E, self.rect_width/self.rect_len)
 
         if self.distance_clip > 0:
             hull_polygon = shapely.intersection(hull_polygon, trace.buffer(self.distance_clip+2*rect_width))
