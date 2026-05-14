@@ -35,7 +35,7 @@ class Bin:
 
     def with_indices(self, indices):
         """Return a new Bin with updated indices but the same geometry."""
-        return Bin(indices, self.trace, self.perp_S, self.perp_E)
+        return Bin(indices, self.trace_S, self.trace_E, self.perp_S, self.perp_E)
 class Context:
     def __init__(self, las, config=None):
         self.las = las
