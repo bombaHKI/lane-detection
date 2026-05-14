@@ -63,12 +63,13 @@ class TraceDistanceFilterStage(Stage):
         n_bins = len(context.bins)
         log_interval = max(1, n_bins // 10)
 
-        for bin_idx, indices in enumerate(context.bins):
+        for bin_idx, b in enumerate(context.bins):
+            indices = b.indices
             if bin_idx % log_interval == 0 or bin_idx == n_bins - 1:
                 self.logger.info(f"Filtering bins: {bin_idx + 1}/{n_bins} ({(bin_idx + 1) / n_bins * 100:.0f}%)")
             total_before += indices.size
             if indices.size == 0:
-                filtered.append(indices)
+                filtered.append(b)
                 continue
 
             # Find the trace segment range that covers this bin's gps_time span
@@ -84,7 +85,7 @@ class TraceDistanceFilterStage(Stage):
                 seg_len2[seg_lo:seg_hi],
             )
             keep = indices[dists <= self.distance]
-            filtered.append(keep)
+            filtered.append(b.with_indices(keep))
             total_after += keep.size
 
         self.logger.info(
@@ -94,7 +95,7 @@ class TraceDistanceFilterStage(Stage):
         context.bins = filtered
 
         global_mask = np.zeros(len(xs), dtype=bool)
-        for indices in filtered:
-            global_mask[indices] = True
+        for b in filtered:
+            global_mask[b.indices] = True
         context.global_mask = global_mask
 

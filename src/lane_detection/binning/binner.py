@@ -1,6 +1,7 @@
 import numpy as np
+import shapely
 
-from lane_detection.pipeline.pipeline import Stage, Context
+from lane_detection.pipeline.pipeline import Bin, Stage, Context
 from lane_detection.utils.logger import create_logger
 
 logger = create_logger('Binning Stage')
@@ -17,21 +18,28 @@ class BinningStage(Stage):
         * its (x, y) lies between the two perpendiculars
           (``(p - P_i) . t_i >= 0`` and ``(p - P_{i+1}) . t_{i+1} < 0``).
 
-    ``context.bins`` is set to ``list[np.ndarray]`` of int64 indices into the LAS arrays.
+    ``context.bins`` is set to ``list[Bin]``.  Each :class:`~lane_detection.pipeline.pipeline.Bin`
+    stores the point indices, the trace section, and the two bounding perpendicular lines.
     """
 
-    def __init__(self, time_threshold: float = 10.0, is_ground_processed: bool = False):
+    def __init__(self, time_threshold: float = 10.0, is_ground_processed: bool = False,
+                 perp_half_width: float = 30.0):
         """
         :param time_threshold: Each bin has a time interval (when the car was in that area).
         Points outside this interval + time_threshold padding will not be considered in the bin.
 
         :param is_ground_processed: If yes, `context.ground_bins` is assigned as well.
         Useful when the ground points are read into the pipeline, so binning can assign `ground_bins` as well.
+
+        :param perp_half_width: Half-length (metres) of each perpendicular boundary line stored in
+        the Bin objects.  The full perpendicular extends ``perp_half_width`` on each side of the
+        trace centre, giving a total line length of ``2 * perp_half_width``.
         """
         if time_threshold < 0:
             raise ValueError("time_threshold should be non-negative.")
         self.time_threshold = float(time_threshold)
         self.is_ground_processed = is_ground_processed
+        self.perp_half_width = float(perp_half_width)
 
     def run(self, context: Context):
         trace = context.trace
@@ -89,9 +97,14 @@ class BinningStage(Stage):
         order = np.argsort(gps, kind='stable')
         gps_sorted = gps[order]
 
-        # --- Assign points to bins -------------------------------------------------------
+        # Precompute normal vectors (perpendicular to tangent) at each virtual point.
+        # normal = [-tang_y, tang_x]  (left-hand perpendicular, unit length)
+        normal = np.column_stack([-tang[:, 1], tang[:, 0]])  # (K, 2)
+        hw = self.perp_half_width
+
+        # --- Assign points to bins and build Bin objects ---------------------------------
         th = self.time_threshold
-        bins: list[np.ndarray] = []
+        bins: list[Bin] = []
         log_interval = max(1, n_bins // 10)
         for i in range(n_bins):
             if i % log_interval == 0 or i == n_bins - 1:
@@ -101,31 +114,42 @@ class BinningStage(Stage):
             lo = np.searchsorted(gps_sorted, t_lo, side='left')
             hi = np.searchsorted(gps_sorted, t_hi, side='right')
             if hi <= lo:
-                bins.append(np.empty(0, dtype=np.int64))
-                continue
+                indices = np.empty(0, dtype=np.int64)
+            else:
+                cand = order[lo:hi]
+                # Signed distances to the two perpendicular boundaries.
+                dx0 = xs[cand] - vp[i, 0]
+                dy0 = ys[cand] - vp[i, 1]
+                d0 = dx0 * tang[i, 0] + dy0 * tang[i, 1]
 
-            cand = order[lo:hi]
-            # Signed distances to the two perpendicular boundaries.
-            dx0 = xs[cand] - vp[i, 0]
-            dy0 = ys[cand] - vp[i, 1]
-            d0 = dx0 * tang[i, 0] + dy0 * tang[i, 1]
+                dx1 = xs[cand] - vp[i + 1, 0]
+                dy1 = ys[cand] - vp[i + 1, 1]
+                d1 = dx1 * tang[i + 1, 0] + dy1 * tang[i + 1, 1]
 
-            dx1 = xs[cand] - vp[i + 1, 0]
-            dy1 = ys[cand] - vp[i + 1, 1]
-            d1 = dx1 * tang[i + 1, 0] + dy1 * tang[i + 1, 1]
+                mask = (d0 >= 0.0) & (d1 < 0.0)
+                indices = cand[mask]
 
-            mask = (d0 >= 0.0) & (d1 < 0.0)
-            bins.append(cand[mask])
+            # Build geometry for this bin.
+            trace_seg = shapely.LineString([vp[i], vp[i + 1]])
+            perp_S = shapely.LineString([
+                (vp[i, 0] + normal[i, 0] * hw, vp[i, 1] + normal[i, 1] * hw),
+                (vp[i, 0] - normal[i, 0] * hw, vp[i, 1] - normal[i, 1] * hw),
+            ])
+            perp_E = shapely.LineString([
+                (vp[i + 1, 0] + normal[i + 1, 0] * hw, vp[i + 1, 1] + normal[i + 1, 1] * hw),
+                (vp[i + 1, 0] - normal[i + 1, 0] * hw, vp[i + 1, 1] - normal[i + 1, 1] * hw),
+            ])
+            bins.append(Bin(indices, trace_seg, perp_S, perp_E))
 
-        total_assigned = sum(b.size for b in bins)
+        total_assigned = sum(b.indices.size for b in bins)
         logger.info(
             f"Assigned {total_assigned} point-bin memberships across {n_bins} bins "
             f"(avg {total_assigned / max(n_bins, 1):.0f} per bin).")
 
         context.bins = bins
         if self.is_ground_processed:
-            context.ground_bins = [b.copy() for b in context.bins]
+            context.ground_bins = [b.with_indices(b.indices.copy()) for b in bins]
             context.ground_mask = np.zeros(len(context.las.x), dtype=bool)
-            for bin in bins:
-                context.ground_mask[bin] = True
+            for b in bins:
+                context.ground_mask[b.indices] = True
 

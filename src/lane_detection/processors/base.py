@@ -21,7 +21,7 @@ class Processor(Stage):
         windows: list[np.ndarray] = []
         start = 0
         while start + window_size <= len(bins):
-            combined = np.concatenate(bins[start : start + window_size])
+            combined = np.concatenate([b.indices for b in bins[start : start + window_size]])
             windows.append(np.unique(combined))
             start += window_shift
 
@@ -45,4 +45,4 @@ class Processor(Stage):
 
         context.prev_mask = context.global_mask
         context.global_mask = global_mask
-        context.bins = [indices[global_mask[indices]] for indices in bins]
+        context.bins = [b.with_indices(b.indices[global_mask[b.indices]]) for b in bins]

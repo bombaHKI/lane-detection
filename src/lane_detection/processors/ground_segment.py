@@ -99,8 +99,8 @@ class GroundSegmentStage(Stage):
         context.global_mask = global_mask
         context.ground_mask = global_mask
         if context.bins is not None:
-            context.bins = [indices[global_mask[indices]] for indices in context.bins]
-            context.ground_bins = [b.copy() for b in context.bins]
+            context.bins = [b.with_indices(b.indices[global_mask[b.indices]]) for b in context.bins]
+            context.ground_bins = [b.with_indices(b.indices.copy()) for b in context.bins]
 
     def _run_independent(self, active_pts, grid):
         """Methods 'basic' and 'grad': each cell is processed independently."""

@@ -15,7 +15,26 @@ class Stage:
         self.logger = create_logger(self.__class__.__name__)
     def run(self, context):
         raise NotImplementedError
-    
+
+class Bin:
+    """A single spatial bin along the car trace.
+
+    Attributes:
+        indices:  int64 array of LAS point indices belonging to this bin.
+        trace:    shapely.LineString — the trace segment between the two boundary virtual points.
+        perp_S:   shapely.LineString — perpendicular line at the start boundary.
+        perp_E:   shapely.LineString — perpendicular line at the end boundary.
+    """
+
+    def __init__(self, indices, trace, perp_S, perp_E):
+        self.indices = indices
+        self.trace = trace
+        self.perp_S = perp_S
+        self.perp_E = perp_E
+
+    def with_indices(self, indices):
+        """Return a new Bin with updated indices but the same geometry."""
+        return Bin(indices, self.trace, self.perp_S, self.perp_E)
 class Context:
     def __init__(self, las, config=None):
         self.las = las
