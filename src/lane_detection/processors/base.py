@@ -41,7 +41,10 @@ class Processor(Stage):
             global_mask[window_indices[keep_mask]] = True
 
         kept = int(global_mask.sum())
-        self.logger.info(f"Processor done: kept {kept}/{n_points} points.")
+        prev_size = n_points
+        if context.prev_mask is not None:
+            prev_size = int(np.sum(context.prev_mask))
+        self.logger.info(f"Processor done: kept {kept}/{prev_size} points.")
 
         context.prev_mask = context.global_mask
         context.global_mask = global_mask
