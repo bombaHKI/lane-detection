@@ -26,9 +26,10 @@ class Bin:
         perp_E:   shapely.LineString — perpendicular line at the end boundary.
     """
 
-    def __init__(self, indices, trace, perp_S, perp_E):
+    def __init__(self, indices, trace_S, trace_E, perp_S, perp_E):
         self.indices = indices
-        self.trace = trace
+        self.trace_S = trace_S
+        self.trace_E = trace_E
         self.perp_S = perp_S
         self.perp_E = perp_E
 
@@ -50,9 +51,9 @@ class Context:
 
         # geometry
         self.trace = None
-        self.bins = None
+        self.bins: list[Bin] = []
+        self.ground_bins: list[Bin] = []
         self.road_surfaces: shapely.Polygon = []
-        self.ground_bins = None
 
         # masks
         self.global_mask = None

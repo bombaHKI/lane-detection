@@ -130,7 +130,6 @@ class BinningStage(Stage):
                 indices = cand[mask]
 
             # Build geometry for this bin.
-            trace_seg = shapely.LineString([vp[i], vp[i + 1]])
             perp_S = shapely.LineString([
                 (vp[i, 0] + normal[i, 0] * hw, vp[i, 1] + normal[i, 1] * hw),
                 (vp[i, 0] - normal[i, 0] * hw, vp[i, 1] - normal[i, 1] * hw),
@@ -139,7 +138,7 @@ class BinningStage(Stage):
                 (vp[i + 1, 0] + normal[i + 1, 0] * hw, vp[i + 1, 1] + normal[i + 1, 1] * hw),
                 (vp[i + 1, 0] - normal[i + 1, 0] * hw, vp[i + 1, 1] - normal[i + 1, 1] * hw),
             ])
-            bins.append(Bin(indices, trace_seg, perp_S, perp_E))
+            bins.append(Bin(indices, vp[i], vp[i+1], perp_S, perp_E))
 
         total_assigned = sum(b.indices.size for b in bins)
         logger.info(
