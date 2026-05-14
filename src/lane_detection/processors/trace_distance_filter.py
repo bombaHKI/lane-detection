@@ -1,8 +1,6 @@
 import numpy as np
-import shapely
-from shapely import contains_xy
 
-from lane_detection.pipeline.pipeline import Stage, Context, Bin
+from lane_detection.pipeline.pipeline import Stage
 
 def _in_quad(px: np.ndarray, py: np.ndarray, corners: np.ndarray) -> np.ndarray:
     """Test whether each point (px[i], py[i]) lies inside a convex quadrilateral.
@@ -37,6 +35,8 @@ class TraceDistanceFilterStage(Stage):
 
     def __init__(self, distance: float = 20.0):
         super().__init__()
+        if distance <= 0.0:
+            raise ValueError("Distance should be positive.")
         self.distance = float(distance)
 
     def run(self, context):
