@@ -1,10 +1,28 @@
 import numpy as np
+import shapely
+from shapely import contains_xy
 
-from lane_detection.pipeline.pipeline import Stage
-from lane_detection.utils.logger import create_logger
+from lane_detection.pipeline.pipeline import Stage, Context, Bin
 
-_SEGMENT_MARGIN = 5  # number of extra trace segments to check on each side of a bin
+def _in_quad(px: np.ndarray, py: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """Test whether each point (px[i], py[i]) lies inside a convex quadrilateral.
 
+    Parameters
+    ----------
+    px, py   : (N,) float arrays of point coordinates.
+    corners  : (4, 2) array of quad vertices in consistent winding order.
+
+    Returns
+    -------
+    (N,) bool array — True if the point is inside (or on the boundary).
+    """
+    inside = np.ones(len(px), dtype=bool)
+    for k in range(4):
+        ax, ay = corners[k]
+        bx, by = corners[(k + 1) % 4]
+        cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+        inside &= cross >= 0
+    return inside
 
 class TraceDistanceFilterStage(Stage):
     """Filter each bin's points to those within *distance* metres of the car
@@ -17,85 +35,48 @@ class TraceDistanceFilterStage(Stage):
     Writes ``context.bins`` with filtered index arrays.
     """
 
-    def __init__(self, distance: float = 21.0):
+    def __init__(self, distance: float = 20.0):
         super().__init__()
         self.distance = float(distance)
 
-    def _segment_distances(self, xs: np.ndarray, ys: np.ndarray, seg_start: np.ndarray, seg_vec: np.ndarray, seg_len2: np.ndarray) -> np.ndarray:
-        """Minimum distance from each point to the nearest of the given segments.
-        xs/ys: (N,), seg_*: (K, 2) / (K,)
-        """
-        pts = np.column_stack([xs, ys])                              # (N, 2)
-        diff    = pts[:, None, :] - seg_start[None, :, :]            # (N, K, 2)
-        t       = (diff * seg_vec[None, :, :]).sum(axis=2) / seg_len2  # (N, K)
-        t       = np.clip(t, 0.0, 1.0)
-        closest = seg_start[None, :, :] + t[:, :, None] * seg_vec[None, :, :]  # (N, K, 2)
-        dist2   = ((pts[:, None, :] - closest) ** 2).sum(axis=2)     # (N, K)
-        return np.sqrt(dist2.min(axis=1))                            # (N,)
-
     def run(self, context):
-        self.logger.info(f"Starting distance clipping with: {self.distance} meters.")
-        if not context.bins:
-            self.logger.info("No bins to filter.")
-            return
+        if context.bins is not None:
+            num_bins = len(context.bins)
+        
+        # Pull full arrays once — avoids re-materialising ScaledArrayView per bin.
+        xs = np.asarray(context.las.x, dtype=np.float64)
+        ys = np.asarray(context.las.y, dtype=np.float64)
+        global_mask = np.zeros(len(xs), dtype=bool)
 
-        trace = context.trace
-        if trace is None or len(trace) < 2:
-            self.logger.info("Trace unavailable; skipping distance filter.")
-            return
+        d = self.distance
+        log_step = max(1, num_bins // 10)
+        for i, bin in enumerate(context.bins):
+            if i % log_step == 0 or i == num_bins - 1:
+                self.logger.info(f"Bin {i + 1}/{num_bins} ({(i + 1) / num_bins * 100:.0f}%)")
 
-        polyline  = np.asarray([p[0][:2] for p in trace], dtype=np.float64)
-        trace_t   = np.asarray([p[1]       for p in trace], dtype=np.float64)
-
-        seg_start = polyline[:-1]
-        seg_vec   = polyline[1:] - seg_start
-        seg_len2  = (seg_vec ** 2).sum(axis=1)
-        seg_len2  = np.where(seg_len2 == 0, 1.0, seg_len2)
-        n_segs    = len(seg_start)
-
-        las = context.las
-        xs = np.asarray(las.x,        dtype=np.float64)
-        ys = np.asarray(las.y,        dtype=np.float64)
-        gps = np.asarray(las.gps_time, dtype=np.float64)
-
-        total_before = total_after = 0
-        filtered: list[np.ndarray] = []
-        n_bins = len(context.bins)
-        log_interval = max(1, n_bins // 10)
-
-        for bin_idx, b in enumerate(context.bins):
-            indices = b.indices
-            if bin_idx % log_interval == 0 or bin_idx == n_bins - 1:
-                self.logger.info(f"Filtering bins: {bin_idx + 1}/{n_bins} ({(bin_idx + 1) / n_bins * 100:.0f}%)")
-            total_before += indices.size
+            indices = bin.indices
             if indices.size == 0:
-                filtered.append(b)
                 continue
 
-            # Find the trace segment range that covers this bin's gps_time span
-            t_lo = gps[indices].min()
-            t_hi = gps[indices].max()
-            seg_lo = max(0,      np.searchsorted(trace_t, t_lo, side='left')  - 1 - _SEGMENT_MARGIN)
-            seg_hi = min(n_segs, np.searchsorted(trace_t, t_hi, side='right') + 1 + _SEGMENT_MARGIN)
+            c_s = np.array(bin.perp_S.coords)   # (2, 2)
+            mid_s = c_s.mean(axis=0)
+            unit_s = c_s[0] - mid_s
+            unit_s /= np.linalg.norm(unit_s)
 
-            dists = self._segment_distances(
-                xs[indices], ys[indices],
-                seg_start[seg_lo:seg_hi],
-                seg_vec[seg_lo:seg_hi],
-                seg_len2[seg_lo:seg_hi],
-            )
-            keep = indices[dists <= self.distance]
-            filtered.append(b.with_indices(keep))
-            total_after += keep.size
+            c_e = np.array(bin.perp_E.coords)   # (2, 2)
+            mid_e = c_e.mean(axis=0)
+            unit_e = c_e[0] - mid_e
+            unit_e /= np.linalg.norm(unit_e)
 
-        self.logger.info(
-            f"Trace distance filter (d<={self.distance} m): "
-            f"{total_before} -> {total_after} points across {len(filtered)} bins."
-        )
-        context.bins = filtered
+            corners = np.array([
+                mid_s + unit_s * d,
+                mid_s - unit_s * d,
+                mid_e - unit_e * d,
+                mid_e + unit_e * d,
+            ])  # (4, 2), winding order: S-left, S-right, E-right, E-left
 
-        global_mask = np.zeros(len(xs), dtype=bool)
-        for b in filtered:
-            global_mask[b.indices] = True
+            mask = _in_quad(xs[indices], ys[indices], corners)
+            global_mask[indices[mask]] = True
+        
+        context.prev_mask = context.global_mask
         context.global_mask = global_mask
-
