@@ -54,7 +54,8 @@ class RoadSurfaceFilter(Processor):
             (x, y - 1),
         ]
     
-    def process_window(self, indices, context: Context):
+    def process_window(self, bin_indices, context: Context):
+        indices = np.unique(np.concatenate([context.bins[j].indices for j in bin_indices]))
         rect_width = self.rect_width
         xy = np.stack((context.las[indices].x, context.las[indices].y),axis=1)
         hull_polygon = shapely.Polygon(xy[ConvexHull(xy).vertices])

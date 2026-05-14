@@ -8,9 +8,21 @@ class Processor(Stage):
     def __init__(self):
         super().__init__()
 
-    def process_window(self, indices: np.ndarray, context: Context) -> np.ndarray:
-        """Process one window.  Return a boolean mask over *indices* of points
-        to keep (True = keep)."""
+    def process_window(self, bin_indices: np.ndarray, context: Context) -> np.ndarray:
+        """Process one window.
+
+        Parameters
+        ----------
+        bin_indices : np.ndarray of int
+            Indices into ``context.bins`` identifying which bins form this window.
+        context : Context
+
+        Returns
+        -------
+        np.ndarray of bool
+            Boolean keep-mask over the combined, unique LAS point indices of those bins.
+            ``True`` = keep the point.
+        """
         raise NotImplementedError
 
     def run(self, context):
@@ -18,11 +30,11 @@ class Processor(Stage):
         window_size = context.window_size
         window_shift = context.window_shift
 
+        # Build windows as arrays of bin indices.
         windows: list[np.ndarray] = []
         start = 0
         while start + window_size <= len(bins):
-            combined = np.concatenate([b.indices for b in bins[start : start + window_size]])
-            windows.append(np.unique(combined))
+            windows.append(np.arange(start, start + window_size, dtype=np.intp))
             start += window_shift
 
         n_windows = len(windows)
@@ -32,13 +44,14 @@ class Processor(Stage):
         global_mask = np.zeros(n_points, dtype=bool)
         log_step = max(1, n_windows // 10)
 
-        for i, window_indices in enumerate(windows):
+        for i, bin_indices in enumerate(windows):
             if i % log_step == 0 or i == n_windows - 1:
                 self.logger.info(f"Window {i + 1}/{n_windows} ({(i + 1) / n_windows * 100:.0f}%)")
-            if window_indices.size == 0:
+            point_indices = np.unique(np.concatenate([bins[j].indices for j in bin_indices]))
+            if point_indices.size == 0:
                 continue
-            keep_mask = self.process_window(window_indices, context)
-            global_mask[window_indices[keep_mask]] = True
+            keep_mask = self.process_window(bin_indices, context)
+            global_mask[point_indices[keep_mask]] = True
 
         kept = int(global_mask.sum())
         prev_size = n_points
