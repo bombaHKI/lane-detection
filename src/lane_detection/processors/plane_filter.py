@@ -16,8 +16,7 @@ class PlaneFilterStage(Processor):
         self.quantile_lo = quantile_lo
         self.quantile_hi = quantile_hi
 
-    def process_window(self, bin_indices: np.ndarray, context) -> np.ndarray:
-        indices = np.unique(np.concatenate([context.bins[j].indices for j in bin_indices]))
+    def process_window(self, bin_indices: np.ndarray, indices: np.ndarray, context) -> np.ndarray:
         if indices.size < 3:
             return np.ones(indices.size, dtype=bool)
         las = context.las

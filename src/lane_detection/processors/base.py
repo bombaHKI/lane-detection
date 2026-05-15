@@ -8,19 +8,21 @@ class Processor(Stage):
     def __init__(self):
         super().__init__()
 
-    def process_window(self, bin_indices: np.ndarray, context: Context) -> np.ndarray:
+    def process_window(self, bin_indices: np.ndarray, point_indices: np.ndarray, context: Context) -> np.ndarray:
         """Process one window.
 
         Parameters
         ----------
         bin_indices : np.ndarray of int
             Indices into ``context.bins`` identifying which bins form this window.
+        point_indices : np.ndarray of int
+            Unique LAS point indices of the combined bins in this window.
         context : Context
 
         Returns
         -------
         np.ndarray of bool
-            Boolean keep-mask over the combined, unique LAS point indices of those bins.
+            Boolean keep-mask over ``point_indices``.
             ``True`` = keep the point.
         """
         raise NotImplementedError
@@ -50,7 +52,7 @@ class Processor(Stage):
             point_indices = np.unique(np.concatenate([bins[j].indices for j in bin_indices]))
             if point_indices.size == 0:
                 continue
-            keep_mask = self.process_window(bin_indices, context)
+            keep_mask = self.process_window(bin_indices, point_indices, context)
             global_mask[point_indices[keep_mask]] = True
 
         kept = int(global_mask.sum())

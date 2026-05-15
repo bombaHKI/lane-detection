@@ -32,8 +32,7 @@ class IntensityThresholdStage(Processor):
         self.min_threshold = float(min_threshold)
         self.percentile = float(percentile)
 
-    def process_window(self, bin_indices: np.ndarray, context) -> np.ndarray:
-        indices = np.unique(np.concatenate([context.bins[j].indices for j in bin_indices]))
+    def process_window(self, bin_indices: np.ndarray, indices: np.ndarray, context) -> np.ndarray:
         intensities = np.asarray(context.las.intensity)
         window_int = intensities[indices]
 

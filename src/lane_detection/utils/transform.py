@@ -1,6 +1,6 @@
 import numpy as np
 
-def scale_along_trace_mtx(S, E, scale: float = 1):
+def scale_along_trace_mtx(S, E, scale: float = 1.0):
     """
     :param S: start of the trace vector
     :param E: end of the trace
