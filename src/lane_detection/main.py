@@ -12,6 +12,7 @@ from lane_detection.processors.trace_distance_filter import TraceDistanceFilterS
 from lane_detection.processors.ground_segment import GroundSegmentStage
 from lane_detection.processors.intensity_threshold import IntensityThresholdStage
 from lane_detection.processors.road_surface import RoadSurfaceFilter
+from lane_detection.processors.road_surface_ground import RoadSurfaceGround
 from lane_detection.processors.local_sor import LocalSORStage
 from lane_detection.processors.downsample import DownsampleStage
 from lane_detection.processors.fit_lines import FitLinesStage
@@ -59,6 +60,7 @@ STAGE_REGISTRY = {
     "ground_segment": GroundSegmentStage,
     "intensity_threshold": IntensityThresholdStage,
     "road_surface": RoadSurfaceFilter,
+    "road_surface_ground": RoadSurfaceGround,
     "local_sor": LocalSORStage,
     "downsample": DownsampleStage,
     "fit_lines": FitLinesStage,
@@ -90,7 +92,7 @@ def build_pipeline(config: dict) -> Pipeline:
 
 
 def main():
-    config_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    config_arg = sys.argv[1] if len(sys.argv) > 1 else "scratch"
     config = load_config(config_arg)
     logger.info("Starting pipeline")
 
@@ -102,7 +104,7 @@ def main():
 
     pipeline = build_pipeline(config)
     pipeline.run(context)
-
+    
 
 if __name__ == "__main__":
     main()
