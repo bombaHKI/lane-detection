@@ -14,26 +14,27 @@ def _eval_quadratic(coeffs: np.ndarray, x: np.ndarray) -> np.ndarray:
 class _TrackedLine:
     """Accumulated lane-line geometry in world (2-D) coordinates."""
 
-    def __init__(self, pts: np.ndarray):
+    def __init__(self, pts: np.ndarray, last_inlier_idx: int | None = None):
         self.pts_world: np.ndarray = None
         self.latest_points: np.ndarray = pts
+        # Index into latest_points of the last point with inlier support.
+        # Points beyond this are extrapolation and can be trimmed.
+        self.last_inlier_idx: int = last_inlier_idx if last_inlier_idx is not None else len(pts) - 1
 
     def local_pts_latest(self, R: np.ndarray, origin: np.ndarray) -> np.ndarray:
         return (self.latest_points - origin) @ R.T
 
-    def extend(self, pts_new: np.ndarray):
+    def extend(self, pts_new: np.ndarray, last_inlier_idx: int | None = None):
         if self.pts_world is None:
             self.pts_world = self.latest_points
         else:
             self.pts_world = np.vstack([self.pts_world, self.latest_points])
         self.latest_points = pts_new
+        self.last_inlier_idx = last_inlier_idx if last_inlier_idx is not None else len(pts_new) - 1
 
-    def trim_to_x(self, max_x_local: float, R: np.ndarray, origin: np.ndarray):
-        """Remove the portion of the line with local x > max_x_local."""
-        lpts = self.local_pts_latest(R, origin)
-        mask = lpts[:, 0] <= max_x_local
-        if mask.any():
-            self.latest_points = self.latest_points[mask]
+    def trim_to_last_inlier(self):
+        """Remove the extrapolated tail beyond the last inlier-supported point."""
+        self.latest_points = self.latest_points[:self.last_inlier_idx + 1]
 
     def to_linestring(self):
         n = (len(self.pts_world) if self.pts_world is not None else 0) + len(self.latest_points)
@@ -57,7 +58,7 @@ class FitLinesStage(Stage):
 
     def __init__(
         self,
-        seed_distance: float = 20.0,
+        seed_distance: float = 10.0,
         fit_threshold: float = 0.15,
         line_width_margin: float = 4,
         curvature_limit: float = 0.05,
@@ -110,13 +111,16 @@ class FitLinesStage(Stage):
 
                 for line_id in active_lines:
                     line_geom = lines[line_id].to_linestring()
-                    p1_world = np.array(shapely.line_interpolate_point(
-                        line_geom, distance=-self.seed_distance
-                    ).coords[0])
-                    p2_world = np.array(shapely.line_interpolate_point(
-                        line_geom, distance=-self.seed_distance/2.0
+                    # Last inlier-supported point on the line
+                    last_inlier_dist = line_geom.project(
+                        shapely.Point(lines[line_id].latest_points[lines[line_id].last_inlier_idx])
+                    )
+                    p2_world = np.array(line_geom.interpolate(last_inlier_dist).coords[0])
+                    p1_world = np.array(line_geom.interpolate(
+                        max(last_inlier_dist - self.seed_distance, 0)
                     ).coords[0])
                     line_end_world = np.array(line_geom.coords[-1])
+
                     # Transform to local (trace-aligned) coordinates
                     p1 = M @ (p1_world - trace_S)
                     p2 = M @ (p2_world - trace_S)
@@ -127,17 +131,17 @@ class FitLinesStage(Stage):
 
                     if inliers is None or len(inliers) < self.min_inliers:
                         failed.append(line_id)
-                        #TODO trime line back
-                        continue
-
-                    candidates.append({
-                        "line_id": line_id,
-                        "inliers": inliers,
-                        "coeffs": coeffs,
-                        "start_x": line_end[0],
-                    })
+                    else:
+                        candidates.append({
+                            "line_id": line_id,
+                            "inliers": inliers,
+                            "coeffs": coeffs,
+                            "start_x": line_end[0],
+                            "seed_pts": np.vstack([p1, p2]),
+                        })
 
                 for line_id in failed:
+                    lines[line_id].trim_to_last_inlier()
                     active_lines.discard(line_id)
                     relevant_lines.discard(line_id)
 
@@ -148,10 +152,12 @@ class FitLinesStage(Stage):
 
                 line_id = best["line_id"]
                 inlier_pts = best["inliers"]
+                max_inlier_x = np.max(inlier_pts[:, 0])
 
+                fit_pts = np.vstack([best["seed_pts"], inlier_pts])
                 coeffs = np.polyfit(
-                    inlier_pts[:, 0],
-                    inlier_pts[:, 1],
+                    fit_pts[:, 0],
+                    fit_pts[:, 1],
                     deg=2,
                 )
 
@@ -172,7 +178,11 @@ class FitLinesStage(Stage):
                 signed_dist = (world_new - trace_E) @ tangent
                 world_new = world_new[signed_dist <= 0]
 
-                lines[line_id].extend(world_new)
+                # Index of last point with inlier support
+                last_inlier_idx = int(np.searchsorted(xs, max_inlier_x, side='right')) - 1
+                last_inlier_idx = min(last_inlier_idx, len(world_new) - 1)
+
+                lines[line_id].extend(world_new, last_inlier_idx=last_inlier_idx)
 
                 # remove nearby points
                 mask = self._distance_to_curve_mask(
@@ -192,6 +202,8 @@ class FitLinesStage(Stage):
 
                 if inliers is None:
                     break
+
+                max_inlier_x = np.max(inliers[:, 0])
 
                 # Refit on all inliers
                 coeffs = np.polyfit(
@@ -217,7 +229,11 @@ class FitLinesStage(Stage):
                 signed_dist = (world_new - trace_E) @ tangent
                 world_new = world_new[signed_dist <= 0]
 
-                new_line = _TrackedLine(world_new)
+                # Index of last point with inlier support
+                last_inlier_idx = int(np.searchsorted(xs, max_inlier_x, side='right')) - 1
+                last_inlier_idx = min(last_inlier_idx, len(world_new) - 1)
+
+                new_line = _TrackedLine(world_new, last_inlier_idx=last_inlier_idx)
                 lines.append(new_line)
                 relevant_lines.add(len(lines) - 1)
 
