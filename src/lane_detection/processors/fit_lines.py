@@ -17,6 +17,7 @@ class _TrackedLine:
     def __init__(self, pts: np.ndarray, last_inlier_idx: int | None = None):
         self.pts_world: np.ndarray = None
         self.latest_points: np.ndarray = pts
+        self.inliers: list[np.ndarray] = []
         # Index into latest_points of the last point with inlier support.
         # Points beyond this are extrapolation and can be trimmed.
         self.last_inlier_idx: int = last_inlier_idx if last_inlier_idx is not None else len(pts) - 1
@@ -31,6 +32,15 @@ class _TrackedLine:
             self.pts_world = np.vstack([self.pts_world, self.latest_points])
         self.latest_points = pts_new
         self.last_inlier_idx = last_inlier_idx if last_inlier_idx is not None else len(pts_new) - 1
+
+    def add_inliers(self, inliers_world: np.ndarray):
+        """Store inlier points (world coordinates) for this line."""
+        self.inliers.append(inliers_world)
+
+    def all_inliers(self) -> np.ndarray | None:
+        if not self.inliers:
+            return None
+        return np.vstack(self.inliers)
 
     def trim_to_last_inlier(self):
         """Remove the extrapolated tail beyond the last inlier-supported point."""
@@ -184,6 +194,10 @@ class FitLinesStage(Stage):
 
                 lines[line_id].extend(world_new, last_inlier_idx=last_inlier_idx)
 
+                # Store inliers in world coordinates
+                inliers_world = (M_inv @ inlier_pts.T).T + trace_S
+                lines[line_id].add_inliers(inliers_world)
+
                 # remove nearby points
                 mask = self._distance_to_curve_mask(
                     pts_rot,
@@ -234,6 +248,9 @@ class FitLinesStage(Stage):
                 last_inlier_idx = min(last_inlier_idx, len(world_new) - 1)
 
                 new_line = _TrackedLine(world_new, last_inlier_idx=last_inlier_idx)
+                # Store inliers in world coordinates
+                inliers_world = (M_inv @ inliers.T).T + trace_S
+                new_line.add_inliers(inliers_world)
                 lines.append(new_line)
                 relevant_lines.add(len(lines) - 1)
 
@@ -245,7 +262,11 @@ class FitLinesStage(Stage):
 
                 pts_rot = pts_rot[~mask]
 
-        context.lines = [line.to_linestring() for line in lines if line.to_linestring() is not None]
+        context.lines = [
+            (line.to_linestring(), line.all_inliers())
+            for line in lines
+            if line.to_linestring() is not None
+        ]
 
     def _ransac_fit(self, pool: np.ndarray, seed_pts: Optional[np.ndarray] = None):
         """RANSAC quadratic fit.

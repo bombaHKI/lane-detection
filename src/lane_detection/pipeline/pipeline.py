@@ -1,6 +1,7 @@
 from lane_detection.utils.logger import create_logger
 
 import shapely
+import numpy as np
 
 class Pipeline:
     def __init__(self, stages):
@@ -56,7 +57,7 @@ class Context:
         self.road_surfaces: shapely.Polygon = []
 
         # masks
-        self.global_mask = None
+        self.global_mask = np.ones(len(las.x), dtype=bool)
         self.prev_mask = None
         self.ground_mask = None
 
