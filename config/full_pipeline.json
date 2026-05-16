@@ -1,11 +1,11 @@
 {
   "input": {
-    "point_path": "data/output/cegl_2/5_downsample.laz"
+    "point_path": "data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
   },
   "context": {
     "window_size": 2,
     "window_shift": 1,
-    "bin_length": 20
+    "bin_length": 25
   },
   "stages": [
     {
@@ -19,8 +19,7 @@
       "name": "car_trace",
       "enabled": true,
       "params": {
-        "method": "window_median_v2",
-        "load_path": "data/output/cegl_2/car_trace/npz/trace_pulse_lines.npz"
+        "method": "pulse_lines"
       }
     },
     {
@@ -28,46 +27,38 @@
       "enabled": true,
       "params": {
         "time_threshold": 10.0,
-        "is_ground_processed": true
+        "is_ground_processed": false
       }
     },
     {
       "name": "trace_distance_filter",
-      "enabled": false,
+      "enabled": true,
       "params": {
-        "distance": 12.0
+        "distance": 15.0
       }
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "1_distance",
         "all": false
       }
     },
     {
-      "name": "plane_filter",
-      "enabled": false,
-      "params": {
-        "quantile_lo": 0.1,
-        "quantile_hi": 0.7
-      }
-    },
-    {
       "name": "ground_segment",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "square_size": 2.0,
         "method": "grad",
-        "distance_threshold": 0.2,
+        "distance_threshold": 0.1,
         "fit_threshold": 0.05,
         "max_gradient": 0.4
       }
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "2_ground",
         "all": false
@@ -75,9 +66,9 @@
     },
     {
       "name": "intensity_threshold",
-      "enabled": false,
+      "enabled": true,
       "params": {
-        "method": "kapur",
+        "method": "percentile",
         "offset": 0.0,
         "min_threshold": 0.0,
         "percentile": 5.0
@@ -85,7 +76,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "3_intensity",
         "all": false
@@ -93,7 +84,7 @@
     },
     {
       "name": "road_surface",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "rect_width": 0.5,
         "rect_len": 2.5,
@@ -103,34 +94,10 @@
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
-        "file_name": "4_road_surface_sparse",
+        "file_name": "4_road_marking",
         "all": false
-      }
-    },
-    {
-      "name": "local_sor",
-      "enabled": false,
-      "params": {
-        "square_size": 1.0,
-        "k": 16,
-        "sigma": 2.0
-      }
-    },
-    {
-      "name": "downsample",
-      "enabled": false,
-      "params": {
-        "square_size": 0.2
-      }
-    },
-    {
-      "name": "write_cloud",
-      "enabled": false,
-      "params": {
-        "file_name": "5_downsample",
-        "all": true
       }
     },
     {
@@ -143,25 +110,29 @@
     },
     {
       "name": "fit_lines",
+      "enabled": true
+    },
+    {
+      "name": "write_lines",
       "enabled": true,
       "params": {
-        "eps": 0.3,
-        "min_samples": 5,
-        "x_scale": 0.2,
-        "min_cluster_points": 10,
-        "min_span": 5.0,
-        "residual_threshold": 0.15,
-        "max_trials": 200,
-        "similarity_threshold": 0.5,
-        "curvature_limit": 0.05,
-        "sample_points": 100
+        "file_name": "5_ransac_lines",
+        "lines_crs": "EPSG:3857"
+      }
+    },
+    {
+      "name": "line_refinement",
+      "enabled": true,
+      "params": {
+        "window_length": 9.0,
+        "n_output_pts": 500
       }
     },
     {
       "name": "write_lines",
       "enabled": true,
       "params": {
-        "file_name": "lane_lines",
+        "file_name": "6_refined_lines",
         "lines_crs": "EPSG:3857"
       }
     }

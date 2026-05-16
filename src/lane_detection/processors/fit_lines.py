@@ -96,8 +96,11 @@ class FitLinesStage(Stage):
 
         lines : list[_TrackedLine] = []
 
+        n_windows = max(1, (len(bins) - window_size) // window_shift + 1)
         relevant_lines = set()
-        for win_start in range(0, len(bins) - window_size + 1, window_shift):
+        for win_i, win_start in enumerate(range(0, len(bins) - window_size + 1, window_shift)):
+            if win_i % max(1, n_windows // 10) == 0:
+                self.logger.info(f"Window {win_i + 1}/{n_windows} | {len(lines)} lines tracked")
             win_end = win_start + window_size
             window_bins = bins[win_start:win_end]
 
@@ -262,6 +265,7 @@ class FitLinesStage(Stage):
 
                 pts_rot = pts_rot[~mask]
 
+        self.logger.info(f"Finished: {len(lines)} lines found")
         context.lines = [
             (line.to_linestring(), line.all_inliers())
             for line in lines
