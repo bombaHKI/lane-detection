@@ -68,7 +68,7 @@ class FitLinesStage(Stage):
 
     def __init__(
         self,
-        seed_distance: float = 10.0,
+        seed_distance: float = 5.0,
         fit_threshold: float = 0.15,
         line_width_margin: float = 4,
         curvature_limit: float = 0.05,
