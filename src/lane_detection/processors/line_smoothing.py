@@ -6,17 +6,23 @@ from shapely.geometry import LineString
 from lane_detection.pipeline.pipeline import Stage, Context
 
 
-class LineRefinementStage(Stage):
-    """Refine fitted lane lines using moving least squares on nearby points."""
+class LineSmoothingStage(Stage):
+    """Refine fitted lane lines using moving least squares on nearby points.
+    
+    Parameters
+    ----------
+    window_length : the window length of the Moving Least Squares
+    output_dentity : number fo point in output string per 10 meters
+    """
 
     def __init__(
         self,
         window_length: float = 5.0,
-        n_output_pts: int = 200,
+        output_density: float = 3.0,
     ):
         super().__init__()
         self.window_length = float(window_length)
-        self.n_output_pts = int(n_output_pts)
+        self.output_density = float(output_density)
 
     def run(self, context: Context):
         n_lines = len(context.lines)
@@ -30,14 +36,15 @@ class LineRefinementStage(Stage):
                     refined_lines.append((line, inliers))
                 continue
 
+            n_pts = max(2, int(np.ceil(line.length / 10 * self.output_density)))
             # Add samples from the fitted line itself to guide MLS
             line_samples = np.array([
                 line.interpolate(d).coords[0]
-                for d in np.linspace(0, line.length, self.n_output_pts)
+                for d in np.linspace(0, line.length, n_pts)
             ])
             combined_pts = np.vstack([inliers, line_samples])
 
-            refined = self._moving_least_squares(line, combined_pts)
+            refined = self._moving_least_squares(line, combined_pts, n_pts)
             if refined is not None:
                 refined_lines.append((refined, inliers))
             else:
@@ -46,7 +53,7 @@ class LineRefinementStage(Stage):
         context.lines = refined_lines
 
     def _moving_least_squares(
-        self, line: LineString, pts: np.ndarray
+        self, line: LineString, pts: np.ndarray, n_pts: int
     ) -> LineString | None:
         """Fit a smooth line through pts using a moving least squares approach."""
         line_length = line.length
@@ -54,7 +61,7 @@ class LineRefinementStage(Stage):
             return None
 
         # Sample evaluation points along the line
-        distances = np.linspace(0, line_length, self.n_output_pts)
+        distances = np.linspace(0, line_length, n_pts)
         result_pts = []
 
         # Direction vectors at each evaluation point

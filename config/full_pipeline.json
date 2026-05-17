@@ -5,7 +5,7 @@
   "context": {
     "window_size": 2,
     "window_shift": 1,
-    "bin_length": 25
+    "bin_length": 40
   },
   "stages": [
     {
@@ -19,7 +19,8 @@
       "name": "car_trace",
       "enabled": true,
       "params": {
-        "method": "pulse_lines"
+        "method": "window_median_v2",
+        "load_path": "data/output/cegl_2/car_trace/npz/trace_pulse_lines.npz"
       }
     },
     {
@@ -39,7 +40,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "1_distance",
         "all": false
@@ -58,7 +59,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "2_ground",
         "all": false
@@ -76,7 +77,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "file_name": "3_intensity",
         "all": false
@@ -101,16 +102,16 @@
       }
     },
     {
-      "name": "binning",
-      "enabled": false,
-      "params": {
-        "time_threshold": 10.0,
-        "is_ground_processed": false
-      }
-    },
-    {
       "name": "fit_lines",
-      "enabled": true
+      "enabled": true,
+      "params": {
+        "seed_distance": 5.0,
+        "fit_threshold": 0.15,
+        "line_width_margin": 4.0,
+        "curvature_limit":  0.05,
+        "min_inliers": 20,
+        "ransac_iterations": 200
+      }
     },
     {
       "name": "write_lines",
@@ -121,11 +122,11 @@
       }
     },
     {
-      "name": "line_refinement",
+      "name": "line_smoothing",
       "enabled": true,
       "params": {
         "window_length": 9.0,
-        "n_output_pts": 500
+        "output_density": 4
       }
     },
     {

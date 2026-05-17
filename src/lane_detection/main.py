@@ -16,7 +16,7 @@ from lane_detection.processors.road_surface_ground import RoadSurfaceGround
 from lane_detection.processors.local_sor import LocalSORStage
 from lane_detection.processors.downsample import DownsampleStage
 from lane_detection.processors.fit_lines import FitLinesStage
-from lane_detection.processors.line_refinement import LineRefinementStage
+from lane_detection.processors.line_smoothing import LineSmoothingStage
 from lane_detection.io.setup import SetupOutputStage
 from lane_detection.io.writer import WriteCloudStage, WriteLines
 
@@ -65,7 +65,7 @@ STAGE_REGISTRY = {
     "local_sor": LocalSORStage,
     "downsample": DownsampleStage,
     "fit_lines": FitLinesStage,
-    "line_refinement": LineRefinementStage,
+    "line_smoothing": LineSmoothingStage,
     "write_cloud": WriteCloudStage,
     "write_lines": WriteLines,
 }
