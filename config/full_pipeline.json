@@ -5,7 +5,7 @@
   "context": {
     "window_size": 2,
     "window_shift": 1,
-    "bin_length": 40
+    "bin_length": 25
   },
   "stages": [
     {
@@ -40,7 +40,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "1_distance",
         "all": false
@@ -59,7 +59,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "2_ground",
         "all": false
@@ -77,7 +77,7 @@
     },
     {
       "name": "write_cloud",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "file_name": "3_intensity",
         "all": false
@@ -101,6 +101,29 @@
         "all": false
       }
     },
+        {
+      "name": "downsample",
+      "enabled": true,
+      "params": {
+        "square_size": 0.1
+      }
+    },
+    {
+      "name": "write_cloud",
+      "enabled": true,
+      "params": {
+        "file_name": "5_downsample",
+        "all": true
+      }
+    },
+    {
+      "name": "binning",
+      "enabled": true,
+      "params": {
+        "time_threshold": 10.0,
+        "is_ground_processed": false
+      }
+    },
     {
       "name": "fit_lines",
       "enabled": true,
@@ -109,7 +132,7 @@
         "fit_threshold": 0.15,
         "line_width_margin": 4.0,
         "curvature_limit":  0.05,
-        "min_inliers": 20,
+        "min_inliers": 30,
         "ransac_iterations": 200
       }
     },
@@ -117,7 +140,7 @@
       "name": "write_lines",
       "enabled": true,
       "params": {
-        "file_name": "5_ransac_lines",
+        "file_name": "6_lane_lines_ransac",
         "lines_crs": "EPSG:3857"
       }
     },
@@ -126,14 +149,34 @@
       "enabled": true,
       "params": {
         "window_length": 9.0,
-        "output_density": 4
+        "output_density": 1
       }
     },
     {
       "name": "write_lines",
       "enabled": true,
       "params": {
-        "file_name": "6_refined_lines",
+        "file_name": "7_lane_lines_refined",
+        "lines_crs": "EPSG:3857"
+      }
+    },
+    {
+      "name": "line_labeling",
+      "enabled": true,
+      "params": {
+        "line_width": 0.25,
+        "max_point_gap": 2.0,
+        "min_line_len": 40.0,
+        "min_section_len": 3.0,
+        "empty_len_threshold": 20.0,
+        "solid_line_threshold": 20.0
+      }
+    },
+    {
+      "name": "write_lines",
+      "enabled": true,
+      "params": {
+        "file_name": "8_lane_lines_labeled",
         "lines_crs": "EPSG:3857"
       }
     }

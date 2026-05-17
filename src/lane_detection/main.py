@@ -17,6 +17,7 @@ from lane_detection.processors.local_sor import LocalSORStage
 from lane_detection.processors.downsample import DownsampleStage
 from lane_detection.processors.fit_lines import FitLinesStage
 from lane_detection.processors.line_smoothing import LineSmoothingStage
+from lane_detection.processors.line_labeling import LineLabelingStage
 from lane_detection.io.setup import SetupOutputStage
 from lane_detection.io.writer import WriteCloudStage, WriteLines
 
@@ -66,6 +67,7 @@ STAGE_REGISTRY = {
     "downsample": DownsampleStage,
     "fit_lines": FitLinesStage,
     "line_smoothing": LineSmoothingStage,
+    "line_labeling": LineLabelingStage,
     "write_cloud": WriteCloudStage,
     "write_lines": WriteLines,
 }

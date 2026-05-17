@@ -63,10 +63,15 @@ class WriteLines(Stage):
             logger.info("No lines to write.")
             return
         try:
-            #   list[tuple[LineString, ndarray]] — (line, inliers) from FitLines + refinement
             line_strings = [item[0] for item in lines]
+            # Check if lines carry labels (3-tuple from LineLabelingStage)
+            if len(lines[0]) >= 3:
+                labels = [item[2] for item in lines]
+            else:
+                labels = [None] * len(lines)
+
             gdf = gpd.GeoDataFrame(
-                {"id": range(len(line_strings))},
+                {"id": range(len(line_strings)), "type": labels},
                 geometry=line_strings,
                 crs=self.lines_crs,
             )
