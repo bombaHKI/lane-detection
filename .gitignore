@@ -1,5 +1,6 @@
 data/
 .venv/
+.vscode
 .secrets.env
 uv.lock
 .DS_Store

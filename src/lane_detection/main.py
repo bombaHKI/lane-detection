@@ -40,6 +40,8 @@ def load_config(config_arg: str | None = None) -> dict:
         candidate = Path(config_arg)
         if candidate.suffix:
             path = candidate
+        elif candidate.is_relative_to(config_dir) or candidate.parts[0] == config_dir.name:
+            path = candidate.with_suffix(".json")
         else:
             path = config_dir / f"{config_arg}.json"
 

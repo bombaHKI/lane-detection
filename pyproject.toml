@@ -2,6 +2,7 @@
 name = "lane-detection"
 version = "0.1.0"
 description = "Thesis project for lane geometry detection from LIDAR data"
+requires-python = ">=3.11"
 readme = "README.md"
 authors = [
     { name = "Haála Kada", email = "kada.haala@tomtom.com" }
@@ -12,7 +13,6 @@ dependencies = [
     "laspy[laszip,lazrs]>=2.6.1",
     "numpy>=2.3.5",
     "open3d>=0.19.0",
-    "opencv-python>=4.13.0.90",
 ]
 
 [build-system]

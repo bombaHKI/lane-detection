@@ -1,57 +1,33 @@
-# Thesis Project: Lane detection from LIDAR data
+# Lane Detection from LiDAR Data
 
-This repository is part of a thesis project aimed at creating "ground truth" map annotations.
+Thesis project for extracting lane-divider geometries from SLAM-stitched, georeferenced LiDAR point clouds.
 
-**Input**: LIDAR data of roads.
-**Expected Output**: Lane dividers in wkt format.
+- **Input**: A large stitched LiDAR scan (`.las/.laz` 100+ Million points)
+- **Output**: Lane divider geometries in a GeoPackage, labelled as `solid` or `dashed`
 
-### Steps
-The planned vague steps for creating lane dividers from LIDAR data:
-1. **Segment Ground**: Discard noise, keep points that are part of the road.
-2. **Segment Road**: Discard points that are not part of the road.
-3. **Segment Road Markings**
-4. **Create Bird Eye View**
-5. **Detect Lane Borders**
+## Pipeline
 
-Current process:
-1. recreate car trace (4 algorithms)
-2. Drop points far from trace
-3. statistical outlier removal (based on neighbour distance)
-4. segment ground (on 5x5 squares, based on slope)
-5. max entropy thresholding on intensity value -> markings
-6. Do something with noisy marking points 
+The pipeline processes the point cloud through the following sequential steps:
 
-Further details and progress will be documented as the project evolves.
+1. **Detect Car Trace** — Reconstruct the vehicle trajectory to approximate lane positions.
+2. **Segment Ground** — Filter out noise; retain only ground-level points.
+3. **Intensity Thresholding** — Discard low-intensity points unlikely to be lane markings.
+4. **Segment Road Markings** — Isolate points on the road surface.
+5. **Detect Lane Boundaries** — Fit lines to road marking clusters using a line-growing algorithm.
+6. **Label Geometries** — Classify each line as `solid` or `dashed`.
 
-### Instructions
+## Running the pipeline
 
-### Lidar ept visualization
-The distortion around the area is ~1.5 compared to on equator in the epsg3857 coordinates.
-For visualising this large lidar input I use use Potree viewer.
-The laz files have to be converted to ept tiles first.
+```bash
+uv run src/lane_detection/main.py config/full_pipeline.json
+```
 
-**Creating the ept tiles:** `entwine build -i 871e1d886ffffff_cegl_m4_2_ground.laz -o ../lidar_ept/871e1d886ffffff_cegl_m4_2_ground`
+This will run the pipeline steps on the lidar data defined in the congig file and create an output folder in `data/ouput`.
 
-(`export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH` for entwine linking issue)
-(since then I run: `sudo install_name_tool -add_rpath /usr/local/lib /usr/local/bin/entwine`)
+The pipeline is driven by a JSON config file. Each step is identified by a keyword defined in `main.py` and executed in order, with each step updating a shared pipeline context. See [config/full_pipeline.json](config/full_pipeline.json) for a reference configuration.
 
-Reminder on how to view the ept files:
-- From `data/lidar_ept`: `lidar_ept % http-server -p 8000 --cors`
-- From 'projects/potree/' (external): `npm start`
-- Open 'http://localhost:1234/examples/lidar_vis.html'.
+> **Note on coordinate systems**: All distance parameters in the config are interpreted in the coordinate system of the input LiDAR file. For data in `EPSG:3857` (Web Mercator), there is a scale distortion relative to real-world distances — approximately 1.5× at Hungarian latitudes. For example, a 15 m clip distance in the config corresponds to roughly 10 m on the ground.
 
+## Visualisation
 
-**Viewing with cesium map**
-In order to visualise the lidar with the cesium map, first we have to use a local projection (`EPSG:23700` for Hungary)
-1. convert las to local projection: `pdal translate 871e1d886ffffff_cegl_m4_2.laz cegl_m4_2_eov.laz reprojection --filters.reprojection.in_srs="EPSG:3857" --filters.reprojection.out_srs="EPSG:23700"`
-2. `entwine build -i cegl_m4_2_eov.laz -o ../lidar_ept/cegl_m4_2_eov`
-3. in the potree html file set: `pointcloudProjection = "+proj=somerc +lat_0=47.1443937222222 +lon_0=19.0485717777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs";`
-
-**Viewing geopackage**
-First we need to create geopackage files from the geojson, then load it potree.
-Example in `lidar_vis_markings.html`
-
-		
-
-### Project Management
-Using the credentials for uv: `export $(grep -v '^#' .secrets.env | xargs)`
+Point clouds are visualised using [Potree](https://github.com/potree/potree). The `.laz` files must first be converted to EPT tiles. See [potree_vis/README.md](potree_vis/README.md) for instructions.

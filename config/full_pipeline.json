@@ -1,6 +1,6 @@
 {
   "input": {
-    "point_path": "data/LiDaR/871e1d886ffffff_cegl_m4_2.laz"
+    "point_path": "data/LiDaR/871e0e043ffffff_tisza.laz"
   },
   "context": {
     "window_size": 2,
@@ -19,8 +19,7 @@
       "name": "car_trace",
       "enabled": true,
       "params": {
-        "method": "window_median_v2",
-        "load_path": "data/output/cegl_2/car_trace/npz/trace_pulse_lines.npz"
+        "method": "pulse_lines"
       }
     },
     {
