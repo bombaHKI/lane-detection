@@ -18,6 +18,7 @@ class _TrackedLine:
         self.pts_world: np.ndarray = None
         self.latest_points: np.ndarray = pts
         self.inliers: list[np.ndarray] = []
+
         # Index into latest_points of the last point with inlier support.
         # Points beyond this are extrapolation and can be trimmed.
         self.last_inlier_idx: int = last_inlier_idx if last_inlier_idx is not None else len(pts) - 1
@@ -74,6 +75,7 @@ class FitLinesStage(Stage):
         curvature_limit: float = 0.05,
         min_inliers: int = 20,
         ransac_iterations: int = 200,
+        num_sample_points: int = 6,
     ):
         super().__init__()
 
@@ -83,6 +85,7 @@ class FitLinesStage(Stage):
         self.curvature_limit = float(curvature_limit)
         self.min_inliers = int(min_inliers)
         self.ransac_iterations = int(ransac_iterations)
+        self.num_sample_points = int(num_sample_points)
 
     def run(self, context: Context):
         bins = context.bins
@@ -280,7 +283,7 @@ class FitLinesStage(Stage):
         random points are sampled from *pool*.
         """
         n_seed = 0 if seed_pts is None else len(seed_pts)
-        n_random = 3 - n_seed
+        n_random = self.num_sample_points - n_seed
 
         if len(pool) < max(n_random, 1):
             return None, None
