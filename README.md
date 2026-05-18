@@ -1,5 +1,7 @@
 # Lane Detection from LiDAR Data
 
+![Lane geometries drawn on the lidar point cloud](media/lanes_drawn_on_pointcloud.png)
+
 Thesis project for extracting lane-divider geometries from SLAM-stitched, georeferenced LiDAR point clouds.
 
 - **Input**: A large stitched LiDAR scan (`.las/.laz` 100+ Million points)
