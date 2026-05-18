@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<title>Potree Viewer</title>
+
+	<link rel="stylesheet" type="text/css" href="../build/potree/potree.css">
+	<link rel="stylesheet" type="text/css" href="../libs/jquery-ui/jquery-ui.min.css">
+	<link rel="stylesheet" type="text/css" href="../libs/openlayers3/ol.css">
+	<link rel="stylesheet" type="text/css" href="../libs/spectrum/spectrum.css">
+	<link rel="stylesheet" type="text/css" href="../libs/jstree/themes/mixed/style.css">
+</head>
+
+<body>
+	<script src="../libs/jquery/jquery-3.1.1.min.js"></script>
+	<script src="../libs/spectrum/spectrum.js"></script>
+	<script src="../libs/jquery-ui/jquery-ui.min.js"></script>
+	<script src="../libs/other/BinaryHeap.js"></script>
+	<script src="../libs/tween/tween.min.js"></script>
+	<script src="../libs/d3/d3.js"></script>
+	<script src="../libs/proj4/proj4.js"></script>
+	<script src="../libs/openlayers3/ol.js"></script>
+	<script src="../libs/i18next/i18next.js"></script>
+	<script src="../libs/jstree/jstree.js"></script>
+	<script src="../libs/copc/index.js"></script>
+	<script src="../build/potree/potree.js"></script>
+	<script src="../libs/plasio/js/laslaz.js"></script>
+
+	<!-- INCLUDE ADDITIONAL DEPENDENCIES HERE -->
+	<!-- INCLUDE SETTINGS HERE -->
+
+	<div class="potree_container" style="position: absolute; width: 100%; height: 100%; left: 0px; top: 0px; ">
+		<div id="potree_render_area" style="background-image: url('../build/potree/resources/images/background.jpg');"></div>
+		<div id="potree_sidebar_container"> </div>
+	</div>
+
+	<script type="module">
+
+	import * as THREE from "../libs/three.js/build/three.module.js";
+		window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
+		viewer.setControls(viewer.earthControls);
+
+
+		viewer.setEDLEnabled(true);
+		viewer.setFOV(60);
+		viewer.setPointBudget(2_000_000);
+		viewer.loadSettingsFromURL();
+
+		// viewer.setDescription("Lidar vis for Kada");
+
+		viewer.loadGUI(() => {
+			viewer.setLanguage('en');
+			$("#menu_appearance").next().show();
+		});
+
+		var names = [
+			// original clouds
+			// "871e1d19effffff_kecs_belv",
+			// "871e1d193ffffff_kecs_szekto",
+			// "871e19c25ffffff_szeg_belv",
+			// "871e0e043ffffff_tisza",
+			// "871e1d8b1ffffff_cegl_m4_1",
+			// "871e1d886ffffff_cegl_m4_2",
+
+			// cegl_1
+			// "output/cegl_1/1_distance_out",
+			// "output/cegl_1/2_plane_prefilter_out",
+			// "output/cegl_1/3_ground_out",
+			// "output/cegl_1/4_intensity_out",
+			// "output/cegl_1/5_road_surface_out",
+			// "output/cegl_1/5_road_surface_in",
+
+			// cegl_2
+			// "output/cegl_2/distance_clip_out",
+			// "output/cegl_2/propagate_ground_out",
+			"output/cegl_2/intensity_out",
+			"output/cegl_2/road_surface_out",
+			"output/cegl_2/road_surface_in",
+
+			// tisza
+			// "output/tisza/1_distance_out",
+			// "output/tisza/2_ground_out",
+			// "output/tisza/3_intensity_out",
+			// "output/tisza/4_road_surface_out",
+			// "output/tisza/4_road_surface_in",
+		]
+
+		names.forEach((name, index) => {
+			var path = `http://localhost:8000/lidar_ept/${name}/ept.json`;
+			Potree.loadPointCloud(path, name, async function(e){
+				viewer.scene.addPointCloud(e.pointcloud);
+	
+				let material = e.pointcloud.material;
+				material.pointSizeType = Potree.PointSizeType.FIXED;
+				material.size = 1;
+				material.activeAttributeName = "intensity";
+
+
+				// Load geopackage after last point cloud
+				if (name === names[names.length-1]) {
+					// e.pointcloud.visible = false;
+					viewer.fitToScreen(0.5);
+
+
+					
+					// cegl_1 
+					// await loadCarTrajectory(`http://localhost:8000/output/cegl_1_run/trace_pulse_lines.geojson?t=${new Date().getTime()}`, "red");
+					// await loadGeoPackage(`http://localhost:8000/output/05_15_02_35/lane_lines.gpkg?t=${new Date().getTime()}`, "rgb(250,0,0)");
+
+					// cegl_2
+					// loadCarTrajectory('http://localhost:8000/output/car_trace/geojson/cegl1.geojson');
+					// await loadGeoPackage(`http://localhost:8000/car_trace/manual_ann_epsg3857.gpkg?t=${new Date().getTime()}`, "rgb(250,0,0)");
+					// await loadGeoPackage(`http://localhost:8000/manual_annotation/trace.gpkg?t=${new Date().getTime()}`, "rgb(100,100,0)");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/cegl_2_perps.gpkg?t=${new Date().getTime()}`, "blue");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_pulse_lines.gpkg?t=${new Date().getTime()}`, "orange");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_closest_point.gpkg?t=${new Date().getTime()}`, "orange");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_window_median_v2.gpkg?t=${new Date().getTime()}`, "yellow");
+					// results
+					await loadGeoPackage(`http://localhost:8000/manual_annotation/lanes.gpkg?t=${new Date().getTime()}`, "blue");
+					await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_solid.gpkg?t=${new Date().getTime()}`, "red");
+					await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_dashed.gpkg?t=${new Date().getTime()}`, "orange");
+				}
+			});			
+		});
+
+		async function loadGeoPackage(url,rgbString) {
+			{ // load a geopackage
+				const geopackage = await Potree.GeoPackageLoader.loadUrl(url, {color: "red"});
+				updateGeoPackageHeight(geopackage);
+				viewer.scene.addGeopackage(geopackage);
+				for (const child of geopackage.node.children[0].children) {
+					child.material.color.setStyle(rgbString);
+				}
+			}
+		}
+
+		async function updateGeoPackageHeight(geopackage) {
+			const pointcloud = viewer.scene.pointclouds[0];
+			const boundingBox = pointcloud.boundingBox;
+			const groundHeight = (boundingBox.max.z+boundingBox.min.z)/2-15;
+
+			for (const child of geopackage.node.children[0].children) {
+				var g = child.geometry;
+				var a1 = g.attributes.instanceStart.array;
+				var a2 = g.attributes.instanceEnd.array;
+				for (let i = 2; i < a1.length; i+=3) {
+					if (a1[i]==0)
+					a1[i] = groundHeight;
+				}
+				
+				for (let i = 2; i < a2.length; i+=3) {
+					if (a2[i]==0)
+					a2[i] = groundHeight;
+				}
+
+				// Tell THREE.js to update the GPU buffer
+				g.attributes.instanceEnd.needsUpdate = true;
+				g.attributes.instanceStart.needsUpdate = true;
+			}
+		}
+
+		async function loadCarTrajectory(url, colorString, heightOffset=0) {
+			try {
+				// Load the car trajectory GeoJSON file with cache-busting
+				const response = await fetch(url);
+				const geojson = await response.json();
+				
+				console.log("Car trajectory loaded:", geojson);
+
+				// Car trajectory is already in EPSG:3857, no transformation needed
+				geojson.features.forEach(feature => {
+					if (feature.geometry.type === "LineString" && feature.geometry.coordinates.length > 0) {
+						const points = feature.geometry.coordinates.map(coord => 
+							new THREE.Vector3(coord[0], coord[1], coord[2]+heightOffset)  // Slightly above ground
+						);
+						
+						const geometry = new THREE.BufferGeometry().setFromPoints(points);
+						const material = new THREE.LineBasicMaterial({ 
+							color: colorString,  // Cyan color for car trajectory
+							linewidth: 150
+						});
+						const line = new THREE.Line(geometry, material);
+						line.name = feature.properties?.name || 'Car Trajectory';
+						viewer.scene.scene.add(line);
+					}
+				});
+
+				console.log("Car trajectory added successfully");
+			} catch (error) {
+				console.error("Failed to load car trajectory:", error);
+			}
+		}
+
+	</script>
+  </body>
+</html>
+
