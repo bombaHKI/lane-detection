@@ -6,5 +6,6 @@ uv.lock
 .DS_Store
 notebooks/exploration.ipynb
 todo.txt
+*.gpkg
 
 __pycache__
