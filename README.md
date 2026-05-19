@@ -11,12 +11,14 @@ Thesis project for extracting lane-divider geometries from SLAM-stitched, georef
 
 The pipeline processes the point cloud through the following sequential steps:
 
-1. **Detect Car Trace** — Reconstruct the vehicle trajectory to approximate lane positions.
-2. **Segment Ground** — Filter out noise; retain only ground-level points.
-3. **Intensity Thresholding** — Discard low-intensity points unlikely to be lane markings.
-4. **Segment Road Markings** — Isolate points on the road surface.
-5. **Detect Lane Boundaries** — Fit lines to road marking clusters using a line-growing algorithm.
-6. **Label Geometries** — Classify each line as `solid` or `dashed`.
+1. **Detect Car Trace** — Reconstruct the vehicle trajectory to approximate lane positions. ![Trace clip](./media/0_trace.png)
+2. **Distance Clip** - Points that are far from the car trace are discarded. ![Distance clip](./media/1_distance.gif)
+3. **Segment Ground** — Filter out noise; retain only ground-level points. ![Ground segment](./media/2_ground.gif)
+4. **Intensity Thresholding** — Discard low-intensity points unlikely to be lane markings. ![Intensity thresholding](./media/3_intensity.gif)
+5. **Segment Road Markings** — Isolate points on the road surface. ![Road markings](./media/4_road_surface.gif)
+6. **Fit and Label lines** — Fit lines to road marking clusters using a line-growing algorithm, then label them. ![Line fit and label](./media/5_lines.gif)
+
+
 
 ## Running the pipeline
 
