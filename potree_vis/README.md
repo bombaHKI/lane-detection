@@ -1,5 +1,8 @@
 # Potree Point Cloud Visualisation
 
+The pointclouds (even multiple ones at the same time 500+ Million points) can be viewed and 
+navigated in the browser via [Potree](https://github.com/potree/potree/).
+
 ## Building EPT tiles
 
 For this step [entwine is required](https://entwine.io/en/latest/).
@@ -22,6 +25,10 @@ entwine build -i 871e1d886ffffff.laz -o ../lidar_ept/871e1d886ffffff
    npm start
    ```
 4. Open `http://localhost:1234/examples/lidar_vis.html` in a browser.
+
+## Adding GeoJson & Geopackage files
+
+See the example in the [example html](./lidar_vis.html).
 
 ## Viewing with a Cesium map
 
