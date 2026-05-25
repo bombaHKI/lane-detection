@@ -26,7 +26,17 @@ The pipeline processes the point cloud through the following sequential steps:
 uv run src/lane_detection/main.py config/full_pipeline.json
 ```
 
-This will run the pipeline steps on the lidar data defined in the congig file and create an output folder in `data/ouput`.
+This will run the pipeline steps on the LiDAR data defined in the config file and create an output folder under the configured output base path.
+
+### Data and output paths
+
+Keep a top-level `data/` directory in the project root.
+
+- Input point-cloud paths are defined in the pipeline config.
+- By convention, input files are stored under `data/lidar/` in the project root.
+- The `setup_output` stage defines the base output path.
+- The pipeline creates a timestamp-named output directory for each run.
+- Intermediate and final artifacts are written into that run directory by the configured write stages.
 
 The pipeline is driven by a JSON config file. Each step is identified by a keyword defined in `main.py` and executed in order, with each step updating a shared pipeline context. See [config/full_pipeline.json](config/full_pipeline.json) for a reference configuration.
 
