@@ -57,30 +57,26 @@
 		});
 
 		var names = [
-			// original clouds
-			// "871e1d19effffff_kecs_belv",
-			// "871e1d193ffffff_kecs_szekto",
-			// "871e19c25ffffff_szeg_belv",
-			// "871e0e043ffffff_tisza",
-			// "871e1d8b1ffffff_cegl_m4_1",
-			// "871e1d886ffffff_cegl_m4_2",
-
 			// cegl_1
+			// "871e1d8b1ffffff_cegl_m4_1",
 			// "output/cegl_1/1_distance_out",
 			// "output/cegl_1/2_plane_prefilter_out",
 			// "output/cegl_1/3_ground_out",
 			// "output/cegl_1/4_intensity_out",
 			// "output/cegl_1/5_road_surface_out",
 			// "output/cegl_1/5_road_surface_in",
-
+			
 			// cegl_2
+			// "871e1d886ffffff_cegl_m4_2",
 			// "output/cegl_2/distance_clip_out",
 			// "output/cegl_2/propagate_ground_out",
-			"output/cegl_2/intensity_out",
-			"output/cegl_2/road_surface_out",
-			"output/cegl_2/road_surface_in",
-
+			// "output/cegl_2/intensity_out",
+			// "output/cegl_2/road_surface_out",
+			// "output/cegl_2/road_surface_in",
+			// "output/cegl_2/bins/bins_107",
+			
 			// tisza
+			// "871e0e043ffffff_tisza",
 			// "output/tisza/1_distance_out",
 			// "output/tisza/2_ground_out",
 			// "output/tisza/3_intensity_out",
@@ -112,24 +108,28 @@
 
 					// cegl_2
 					// loadCarTrajectory('http://localhost:8000/output/car_trace/geojson/cegl1.geojson');
-					// await loadGeoPackage(`http://localhost:8000/car_trace/manual_ann_epsg3857.gpkg?t=${new Date().getTime()}`, "rgb(250,0,0)");
-					// await loadGeoPackage(`http://localhost:8000/manual_annotation/trace.gpkg?t=${new Date().getTime()}`, "rgb(100,100,0)");
+					// await loadGeoPackage(`http://localhost:8000/car_trace/manual_ann_epsg3857.gpkg?t=${new Date().getTime()}`, "rgb(250,0,0)",140);
+					// await loadGeoPackage(`http://localhost:8000/manual_annotation/trace.gpkg?t=${new Date().getTime()}`, "red");
+					// await loadGeoPackage(`http://localhost:8000/manual_annotation/trace_for_vis.gpkg?t=${new Date().getTime()}`, "#2bceff", 140);
 					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/cegl_2_perps.gpkg?t=${new Date().getTime()}`, "blue");
-					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_pulse_lines.gpkg?t=${new Date().getTime()}`, "orange");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/pulse_lines.gpkg?t=${new Date().getTime()}`, "#2bceff",140);
 					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_closest_point.gpkg?t=${new Date().getTime()}`, "orange");
-					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/trace_window_median_v2.gpkg?t=${new Date().getTime()}`, "yellow");
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/window_median.gpkg?t=${new Date().getTime()}`, "yellow",140);
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/car_trace/geopackage/window_median_v2.gpkg?t=${new Date().getTime()}`, "orange", 140);
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/context_geometries.gpkg?t=${new Date().getTime()}`, "orange", 140);
 					// results
-					await loadGeoPackage(`http://localhost:8000/manual_annotation/lanes.gpkg?t=${new Date().getTime()}`, "blue");
-					await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_solid.gpkg?t=${new Date().getTime()}`, "red");
-					await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_dashed.gpkg?t=${new Date().getTime()}`, "orange");
+					// await loadGeoPackage(`http://localhost:8000/manual_annotation/lanes.gpkg?t=${new Date().getTime()}`, "blue", 144);
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_solid.gpkg?t=${new Date().getTime()}`, "#de2110", 144);
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_dashed.gpkg?t=${new Date().getTime()}`, "#31d11f", 144);
+					// await loadGeoPackage(`http://localhost:8000/output/cegl_2/8_lane_lines_dashed.gpkg?t=${new Date().getTime()}`, "#31d11f", 144);
 				}
 			});			
 		});
 
-		async function loadGeoPackage(url,rgbString) {
+		async function loadGeoPackage(url,rgbString,absHeight=null) {
 			{ // load a geopackage
 				const geopackage = await Potree.GeoPackageLoader.loadUrl(url, {color: "red"});
-				updateGeoPackageHeight(geopackage);
+				updateGeoPackageHeight(geopackage,absHeight);
 				viewer.scene.addGeopackage(geopackage);
 				for (const child of geopackage.node.children[0].children) {
 					child.material.color.setStyle(rgbString);
@@ -137,22 +137,18 @@
 			}
 		}
 
-		async function updateGeoPackageHeight(geopackage) {
+		async function updateGeoPackageHeight(geopackage,absHeight) {
 			const pointcloud = viewer.scene.pointclouds[0];
 			const boundingBox = pointcloud.boundingBox;
-			const groundHeight = (boundingBox.max.z+boundingBox.min.z)/2-15;
+
+			const groundHeight = absHeight? absHeight: (boundingBox.max.z+boundingBox.min.z)/2-15;
 
 			for (const child of geopackage.node.children[0].children) {
 				var g = child.geometry;
 				var a1 = g.attributes.instanceStart.array;
 				var a2 = g.attributes.instanceEnd.array;
 				for (let i = 2; i < a1.length; i+=3) {
-					if (a1[i]==0)
 					a1[i] = groundHeight;
-				}
-				
-				for (let i = 2; i < a2.length; i+=3) {
-					if (a2[i]==0)
 					a2[i] = groundHeight;
 				}
 
